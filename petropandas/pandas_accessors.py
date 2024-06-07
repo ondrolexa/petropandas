@@ -16,9 +16,11 @@ from petropandas import *
 
 df = pd.read_excel('/home/ondro/Active/mong2024/mnz/mnz_2024_santabarbara_labels.xlsx', sheet_name='Jerabek', skiprows=1)
 df = df.petro.fix_columns('SB')
-s = df.petro.search('PJ118A', on='Label').ree.normalize(Eu=True, GdYb=True)
-s.ree.plot()
-
+s = df.petro.search('PJ109A', on='Label').ree.normalize()
+s = s.petro.calc('Th/U')
+s.ree.plot(hue='position')
+sns.boxplot(data=s, x="position", y="Gd/Yb")
+sns.boxplot(data=s, x="position", y="Th/U")
 s.isoplot.clipboard(C='Gd/Yb')
 """
 
@@ -97,6 +99,10 @@ class PetroAccessor:
         if tmpl not in COLNAMES:
             raise TemplateNotDefined(tmpl)
         return self._obj.rename(columns=COLNAMES[tmpl])
+
+    def calc(self, expr):
+        self._obj[expr] = self._obj.eval(expr)
+        return self._obj
 
 
 @pd.api.extensions.register_dataframe_accessor("oxides")
@@ -276,10 +282,8 @@ class REEAccessor:
         nrm = pd.Series(standards[reservoir][reference][source])
         res = self._df / nrm
         res = res[self._ree]
-        if kwargs.get("Eu", False):
-            res["Eu/Eu*"] = res["Eu"] / np.sqrt(res["Sm"] * res["Gd"])
-        if kwargs.get("GdYb", False):
-            res["Gd/Yb"] = res["Gd"] / res["Yb"]
+        res["Eu/Eu*"] = res["Eu"] / np.sqrt(res["Sm"] * res["Gd"])
+        res["Gd/Yb"] = res["Gd"] / res["Yb"]
         return self._final(res, **kwargs)
 
     def plot(self, **kwargs):
