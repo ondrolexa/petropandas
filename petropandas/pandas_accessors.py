@@ -1,4 +1,5 @@
 import importlib.resources
+import json
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,8 +29,9 @@ REE = [
     "Y",
 ]
 
-germ = importlib.resources.files("petropandas") / "data" / "GERM.pkl"
-standards = pd.read_pickle(germ)
+germ = importlib.resources.files("petropandas") / "data" / "germ.json"
+with open(germ) as fp:
+    standards = json.load(fp)
 
 
 def oxideprops(f):
@@ -213,6 +215,9 @@ class REEAccessor:
         return self._obj[self._ree]
 
     def _final(self, df, **kwargs):
+        select = kwargs.get("select", [])
+        if select:
+            df = df[select]
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
     def df(self, **kwargs):
@@ -220,11 +225,11 @@ class REEAccessor:
 
     def normalize(self, **kwargs):
         reservoir = kwargs.get("reservoir", "CI Chondrites")
-        ref = kwargs.get("reservoir", "McDonough & Sun 1995")
-        cite = kwargs.get("reservoir", "None")
-        nrm = standards.loc[reservoir].loc[ref].loc[cite]
+        reference = kwargs.get("reference", "McDonough & Sun 1995")
+        source = kwargs.get("source", reference)
+        nrm = pd.Series(standards[reservoir][reference][source])
         res = self._df / nrm
-        res = res[nrm.index]
+        res = res[self._ree]
         if kwargs.get("Eu", False):
             res["Eu/Eu*"] = res["Eu"] / np.sqrt(res["Sm"] * res["Gd"])
         if kwargs.get("GdYb", False):
@@ -232,12 +237,27 @@ class REEAccessor:
         return self._final(res, **kwargs)
 
     def plot(self, **kwargs):
+        if "select" not in kwargs:
+            kwargs["select"] = [
+                "La",
+                "Ce",
+                "Pr",
+                "Nd",
+                "Sm",
+                "Eu",
+                "Gd",
+                "Tb",
+                "Dy",
+                "Ho",
+                "Er",
+                "Tm",
+                "Yb",
+                "Lu",
+            ]
         fig, ax = plt.subplots()
         ax.set(yscale="log")
         if kwargs.get("grouped", True):
-            ree = self.df(**kwargs).melt(
-                id_vars=kwargs.get("keep", self._others), var_name="ree"
-            )
+            ree = self.df(**kwargs).melt(id_vars=kwargs.get("keep", self._others), var_name="ree")
             sns.lineplot(
                 x="ree",
                 y="value",
