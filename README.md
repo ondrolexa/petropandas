@@ -11,26 +11,30 @@ Pandas accessors for petrologists
 - **Github repository**: <https://github.com/ondrolexa/petropandas/>
 - **Documentation** <https://ondrolexa.github.io/petropandas/>
 
-## Getting started with your project
+## Getting started
 
-First, create a repository on GitHub with the same name as this project, and then run the following commands:
+First, import the petropandas. Note that numpy, matplotlib.pyplot, pandas and seaborn are also
+imported using common aliases np, plt, pd and sns:
 
-```bash
-git init -b main
-git add .
-git commit -m "init commit"
-git remote add origin git@github.com:ondrolexa/petropandas.git
-git push -u origin main
+```python
+from petropandas import *
 ```
 
-Finally, install the environment and the pre-commit hooks with
+You are now ready to use petropandas tools.
 
-```bash
-make install
+```python
+df = pd.read_excel("some/folder/data.xlsx")
+df.oxides.molprop()
+df.oxides.cations(noxy=12)
+
+df.ree.normalize(reservoir='CI Chondrites', reference='McDonough & Sun 1995')
 ```
 
-You are now ready to start development on your project!
+## GitHub actions
+
 The CI/CD pipeline will be triggered when you open a pull request, merge to main, or when you create a new release.
+
+## Documentation
 
 To finalize the set-up for publishing to PyPi or Artifactory, see [here](https://fpgmaas.github.io/cookiecutter-poetry/features/publishing/#set-up-for-pypi).
 For activating the automatic documentation with MkDocs, see [here](https://fpgmaas.github.io/cookiecutter-poetry/features/mkdocs/#enabling-the-documentation-on-github).
