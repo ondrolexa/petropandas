@@ -5,7 +5,7 @@ site_description: Pandas accessors for petrologists
 site_author: Ondrej Lexa
 edit_uri: edit/main/docs/
 repo_name: ondrolexa/petropandas
-copyright: Maintained by <a href="https://ondrolexa.com">Florian</a>.
+copyright: Maintained by Ondrej Lexa.
 
 nav:
   - Home: index.md

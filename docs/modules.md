@@ -1,1 +1,1 @@
-::: petropandas.foo
+::: petropandas.pandas_accessors
