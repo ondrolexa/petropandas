@@ -3,14 +3,22 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from petropandas.pandas_accessors import ElementsAccessor, OxidesAccessor, REEAccessor
+from petropandas.pandas_accessors import (
+    ElementsAccessor,
+    IsoplotAccessor,
+    OxidesAccessor,
+    PetroAccessor,
+    REEAccessor,
+)
 
 __all__ = (
     "np",
     "plt",
     "pd",
     "sns",
+    "PetroAccessor",
     "ElementsAccessor",
     "OxidesAccessor",
     "REEAccessor",
+    "IsoplotAccessor",
 )

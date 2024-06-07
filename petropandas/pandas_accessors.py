@@ -9,29 +9,27 @@ import seaborn as sns
 from pandas.api.types import is_numeric_dtype
 from periodictable import formula, oxygen
 
-REE = [
-    "La",
-    "Ce",
-    "Pr",
-    "Nd",
-    "Pm",
-    "Sm",
-    "Eu",
-    "Gd",
-    "Tb",
-    "Dy",
-    "Ho",
-    "Er",
-    "Tm",
-    "Yb",
-    "Lu",
-    "Sc",
-    "Y",
-]
+from petropandas.constants import COLNAMES, ISOPLOT, ISOPLOT_FORMATS, REE, REE_PLOT
+
+"""
+from petropandas import *
+
+df = pd.read_excel('/home/ondro/Active/mong2024/mnz/mnz_2024_santabarbara_labels.xlsx', sheet_name='Jerabek', skiprows=1)
+df = df.petro.fix_columns('SB')
+s = df.petro.search('PJ118A', on='Label').ree.normalize(Eu=True, GdYb=True)
+s.ree.plot()
+
+s.isoplot.clipboard(C='Gd/Yb')
+"""
 
 germ = importlib.resources.files("petropandas") / "data" / "germ.json"
 with open(germ) as fp:
     standards = json.load(fp)
+
+
+ppconfig = {
+    "isoplot_default_format": 2,
+}
 
 
 def oxideprops(f):
@@ -55,8 +53,50 @@ def elementprops(f):
 
 
 class MissingColumns(Exception):
-    def __init__(self, cols):
-        super().__init__(f"Must have {cols} in columns.")
+    def __init__(self, col):
+        super().__init__(f"Must have {col} in columns.")
+
+
+class NotTextualIndex(Exception):
+    def __init__(self):
+        super().__init__("Index is not textual.")
+
+
+class NotTextualColumn(Exception):
+    def __init__(self, col):
+        super().__init__(f"Column {col} is not textual.")
+
+
+class TemplateNotDefined(Exception):
+    def __init__(self, tmpl):
+        super().__init__(f"Column definition {tmpl} is not defined")
+
+
+@pd.api.extensions.register_dataframe_accessor("petro")
+class PetroAccessor:
+    def __init__(self, pandas_obj):
+        self._obj = pandas_obj
+
+    def search(self, s, on=None):
+        if on is None:
+            col = self._obj.index
+        else:
+            if on not in self._obj:
+                raise MissingColumns(on)
+            col = self._obj[on]
+        if not is_numeric_dtype(col):
+            col = pd.Series([str(v) for v in col], index=self._obj.index)
+            return self._obj.loc[col.str.contains(s)].copy()
+        else:
+            if on is None:
+                raise NotTextualIndex()
+            else:
+                raise NotTextualColumn(on)
+
+    def fix_columns(self, tmpl):
+        if tmpl not in COLNAMES:
+            raise TemplateNotDefined(tmpl)
+        return self._obj.rename(columns=COLNAMES[tmpl])
 
 
 @pd.api.extensions.register_dataframe_accessor("oxides")
@@ -96,6 +136,9 @@ class OxidesAccessor:
         return self._obj[self._oxides]
 
     def _final(self, df, **kwargs):
+        select = kwargs.get("select", [])
+        if select:
+            df = df[select]
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
     def df(self, **kwargs):
@@ -177,6 +220,9 @@ class ElementsAccessor:
         return self._obj[self._elements]
 
     def _final(self, df, **kwargs):
+        select = kwargs.get("select", [])
+        if select:
+            df = df[select]
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
     def df(self, **kwargs):
@@ -238,26 +284,15 @@ class REEAccessor:
 
     def plot(self, **kwargs):
         if "select" not in kwargs:
-            kwargs["select"] = [
-                "La",
-                "Ce",
-                "Pr",
-                "Nd",
-                "Sm",
-                "Eu",
-                "Gd",
-                "Tb",
-                "Dy",
-                "Ho",
-                "Er",
-                "Tm",
-                "Yb",
-                "Lu",
-            ]
+            kwargs["select"] = REE_PLOT
         fig, ax = plt.subplots()
         ax.set(yscale="log")
-        if kwargs.get("grouped", True):
-            ree = self.df(**kwargs).melt(id_vars=kwargs.get("keep", self._others), var_name="ree")
+        ree = self.df(**kwargs).melt(
+            id_vars=kwargs.get("keep", self._others),
+            var_name="ree",
+            ignore_index=False,
+        )
+        if kwargs.get("grouped", False):
             sns.lineplot(
                 x="ree",
                 y="value",
@@ -268,8 +303,60 @@ class REEAccessor:
                 ax=ax,
             )
         else:
-            sns.lineplot(data=self._df.T, legend=False, ax=ax)
+            sns.lineplot(
+                x="ree",
+                y="value",
+                data=ree,
+                hue=kwargs.get("hue", None),
+                units=ree.index,
+                estimator=None,
+                legend="brief",
+                ax=ax,
+            )
         plt.show()
+
+
+@pd.api.extensions.register_dataframe_accessor("isoplot")
+class IsoplotAccessor:
+    def __init__(self, pandas_obj):
+        self._validate(pandas_obj)
+        self._obj = pandas_obj
+
+    def _validate(self, obj):
+        # verify there is a isoplot column
+        valid = []
+        self._isoplot = []
+        self._others = []
+        for col in obj.columns:
+            if col in ISOPLOT:
+                valid.append(True)
+                self._isoplot.append(col)
+            else:
+                valid.append(False)
+                self._others.append(col)
+        if not any(valid):
+            raise MissingColumns("isoplot")
+
+    @property
+    def _df(self):
+        return self._obj[self._isoplot]
+
+    def clipboard(self, **kwargs):
+        iso = kwargs.get("iso", ppconfig["isoplot_default_format"])
+        df = self._df[ISOPLOT_FORMATS[iso]]
+        if "C" in kwargs:
+            df["C"] = self._obj[kwargs["C"]]
+        else:
+            df["C"] = None
+        if "omit" in kwargs:
+            df["omit"] = self._obj[kwargs["omit"]]
+        else:
+            df["omit"] = None
+        if "comment" in kwargs:
+            df["comment"] = self._obj[kwargs["comment"]]
+        else:
+            df["comment"] = None
+        df.to_clipboard(header=False, index=False)
 
 
 if __name__ == "__main__":  # pragma: no cover
