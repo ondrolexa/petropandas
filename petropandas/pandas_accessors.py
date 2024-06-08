@@ -9,20 +9,7 @@ import seaborn as sns
 from pandas.api.types import is_numeric_dtype
 from periodictable import formula, oxygen
 
-from petropandas.constants import COLNAMES, ISOPLOT, ISOPLOT_FORMATS, REE, REE_PLOT
-
-"""
-from petropandas import *
-
-df = pd.read_excel('/home/ondro/Active/mong2024/mnz/mnz_2024_santabarbara_labels.xlsx', sheet_name='Jerabek', skiprows=1)
-df = df.petro.fix_columns('SB')
-s = df.petro.search('PJ109A', on='Label').ree.normalize()
-s = s.petro.calc('Th/U')
-s.ree.plot(hue='position')
-sns.boxplot(data=s, x="position", y="Gd/Yb")
-sns.boxplot(data=s, x="position", y="Th/U")
-s.isoplot.clipboard(C='Gd/Yb')
-"""
+from petropandas.constants import AGECOLS, COLNAMES, ISOPLOT, ISOPLOT_FORMATS, REE, REE_PLOT
 
 germ = importlib.resources.files("petropandas") / "data" / "germ.json"
 with open(germ) as fp:
@@ -361,6 +348,22 @@ class IsoplotAccessor:
         else:
             df["comment"] = None
         df.to_clipboard(header=False, index=False)
+
+    def calc_ages(self, **kwargs):
+        iso = kwargs.get("iso", ppconfig["isoplot_default_format"])
+        self.clipboard(**kwargs)
+        print(f"Data in format {iso} copied to clipboard")
+        print("Calc ages with Sracey-Kramers, discordance and digits 3")
+        input("Then copy to clipboard and press Enter to continue...")
+        ages = pd.read_clipboard(header=None)
+        if ages.shape[1] == 9:
+            ages.columns = AGECOLS
+            ages.index = self._obj.index
+            for col in AGECOLS:
+                self._obj[col] = ages[col]
+            print("Ages added to data")
+        else:
+            print("Wrong shape of data. Set correct options and try again.")
 
 
 if __name__ == "__main__":  # pragma: no cover

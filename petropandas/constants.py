@@ -80,6 +80,18 @@ ISOPLOT_FORMATS = {
     ],
 }
 
+AGECOLS = [
+    "Age75",
+    "Age75_Err",
+    "Age68",
+    "Age68_Err",
+    "Age76",
+    "Age76_Err",
+    "BestAge",
+    "BestAge_Err",
+    "Disc",
+]
+
 COLNAMES = {
     "SB": {
         "238U/206Pb": "38/06",
