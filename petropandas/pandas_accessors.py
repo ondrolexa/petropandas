@@ -74,6 +74,17 @@ class PetroAccessor:
         self._obj = pandas_obj
 
     def search(self, s, on=None):
+        """Select subset of data from dataframe containing string s in index or column.
+
+        Note: Works only with non-numeric index or column
+
+        Args:
+            s (str): Returns all rows which contain string s in index or column.
+            on: Name of column used for search. When `None` the index is used
+
+        Returns:
+            Dataframe with selected data
+        """
         if on is None:
             col = self._obj.index
         else:

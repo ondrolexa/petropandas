@@ -9,7 +9,7 @@ copyright: Maintained by Ondrej Lexa.
 
 nav:
   - Home: index.md
-  - Modules: modules.md
+  - Accessors: accessors.md
 plugins:
   - search
   - mkdocstrings:
