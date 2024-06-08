@@ -9,7 +9,14 @@ import seaborn as sns
 from pandas.api.types import is_numeric_dtype
 from periodictable import formula, oxygen
 
-from petropandas.constants import AGECOLS, COLNAMES, ISOPLOT, ISOPLOT_FORMATS, REE, REE_PLOT
+from petropandas.constants import (
+    AGECOLS,
+    COLNAMES,
+    ISOPLOT,
+    ISOPLOT_FORMATS,
+    REE,
+    REE_PLOT,
+)
 
 germ = importlib.resources.files("petropandas") / "data" / "germ.json"
 with open(germ) as fp:
@@ -87,6 +94,9 @@ class PetroAccessor:
             raise TemplateNotDefined(tmpl)
         return self._obj.rename(columns=COLNAMES[tmpl])
 
+    def strip_columns(self):
+        return self._obj.rename(columns=lambda x: x.strip())
+
     def calc(self, expr):
         self._obj[expr] = self._obj.eval(expr)
         return self._obj
@@ -137,6 +147,9 @@ class OxidesAccessor:
     def df(self, **kwargs):
         return self._final(self._df, **kwargs)
 
+    def mean(self, **kwargs):
+        return pd.DataFrame(self._df.mean(axis=0)).T
+
     def scale(self, **kwargs):
         to = kwargs.get("to", 100.0)
         res = to * self._df.div(self._df.sum(axis=1), axis=0)
@@ -155,12 +168,10 @@ class OxidesAccessor:
         return self._final(res, **kwargs)
 
     def onf(self, noxy, **kwargs):
-        res = noxy / self.oxy_number.sum(axis=1)
-        return self._final(res, **kwargs)
+        return noxy / self.oxy_number(keep=[]).sum(axis=1)
 
     def cnf(self, ncat, **kwargs):
-        res = ncat / self.cat_number.sum(axis=1)
-        return self._final(res, **kwargs)
+        return ncat / self.cat_number(keep=[]).sum(axis=1)
 
     def cations(self, **kwargs):
         noxy = kwargs.get("noxy", 1)
@@ -174,6 +185,84 @@ class OxidesAccessor:
             df = self.cat_number.multiply(self.onf(noxy), axis=0)
             df.columns = [str(cat) for cat in self.props["cation"]]
             return self._final(df, **kwargs)
+
+    def charges(self, ncat, **kwargs):
+        charge = self.cat_number(keep=[]).mul(self.cnf(ncat), axis=0) * self.props["charge"]
+        return self._final(charge, **kwargs)
+
+    def apatite_correction(self, **kwargs):
+        if ("P2O5" in self._oxides) and ("CaO" in self._oxides):
+            df = self._df.div(self.props["mass"])
+            df = df.div(df.sum(axis=1), axis=0)
+            df["CaO"] = (df["CaO"] - (10 / 3) * df["P2O5"]).clip(lower=0)
+            df = df.mul(self.props["mass"], axis=1)
+            df = df.drop(columns="P2O5")
+            df = df.div(df.sum(axis=1), axis=0).mul(self._df.sum(axis=1), axis=0)
+            return self._final(df, **kwargs)
+        else:
+            print("Both CaO and P2O5 not in data. Nothing changed.")
+            return self._final(self._df, **kwargs)
+
+    def convert_Fe(self, **kwargs):
+        to = kwargs.get("to", "FeO")
+        if (to == "FeO") and ("Fe2O3" in self._oxides):
+            Fe3to2 = 2 * formula("FeO").mass / formula("Fe2O3").mass
+            res = self._df.copy()
+            if "FeO" in self._oxides:
+                res["FeO"] += Fe3to2 * res["Fe2O3"]
+            else:
+                res["FeO"] = Fe3to2 * res["Fe2O3"]
+            res = res.drop(columns="Fe2O3")
+            return self._final(res, **kwargs)
+        elif (to == "Fe2O3") and ("FeO" in self._oxides):
+            Fe2to3 = formula("Fe2O3").mass / formula("FeO").mass / 2
+            res = self._df.copy()
+            if "Fe2O3" in self._oxides:
+                res["Fe2O3"] += Fe2to3 * res["FeO"]
+            else:
+                res["Fe2O3"] = Fe2to3 * res["FeO"]
+            res = res.drop(columns="FeO")
+            return self._final(res, **kwargs)
+        else:
+            print("Both FeO and Fe2O3 not in data. Nothing changed.")
+            return self._final(self._df, **kwargs)
+
+    def recalculate_Fe(self, noxy, ncat, **kwargs):
+        charge = self.cat_number(keep=[]).mul(self.cnf(ncat), axis=0)
+        if ("Fe2O3" in self._oxides) & ("FeO" not in self._oxides):
+            charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
+            chargedef = 2 * noxy - self.charges(ncat, keep=[]).sum(axis=1)
+            toconv = chargedef
+            charge["Fe2O3"] += toconv
+            charge["FeO"] = -toconv
+            ncats = self.props["ncat"]
+            ncats["FeO"] = 1
+            mws = self.props["mass"]
+            mws["FeO"] = formula("FeO").mass
+        elif "Fe2O3" in self._oxides:
+            charge["Fe2O3"].loc[pd.isna(self.df["Fe2O3"])] = 0
+            chargedef = 2 * noxy - self.charges(ncat, keep=[]).sum(axis=1)
+            toconv = chargedef.clip(lower=0, upper=charge["FeO"])
+            charge["Fe2O3"] += toconv
+            charge["FeO"] = charge["FeO"] - toconv
+            ncats = self.props["ncat"]
+            mws = self.props["mass"]
+        elif "FeO" in self._oxides:
+            chargedef = 2 * noxy - self.charges(ncat, keep=[]).sum(axis=1)
+            charge["Fe2O3"] = chargedef.clip(lower=0, upper=charge["FeO"])
+            charge["FeO"] = charge["FeO"] - charge["Fe2O3"]
+            ncats = self.props["ncat"].copy()
+            ncats["Fe2O3"] = 2
+            mws = self.props["mass"].copy()
+            mws["Fe2O3"] = formula("Fe2O3").mass
+        else:
+            print("No Fe in data. Nothing changed")
+            return self._final(self._df, **kwargs)
+        res = self._df.copy()
+        ncharge = charge / ncat
+        df = ncharge.mul(mws).mul(self.cat_number(keep=[]).sum(axis=1), axis="rows").div(ncats)
+        res[df.columns] = df
+        return self._final(res, **kwargs)
 
 
 @pd.api.extensions.register_dataframe_accessor("elements")
