@@ -23,9 +23,7 @@ with open(germ) as fp:
     standards = json.load(fp)
 
 
-ppconfig = {
-    "isoplot_default_format": 2,
-}
+ppconfig = {"isoplot_default_format": 2, "colnames": COLNAMES}
 
 
 def oxideprops(f):
@@ -65,7 +63,7 @@ class NotTextualColumn(Exception):
 
 class TemplateNotDefined(Exception):
     def __init__(self, tmpl):
-        super().__init__(f"Column definition {tmpl} is not defined")
+        super().__init__(f"Column definition {tmpl} is not defined. Check `ppconfig['colnames']`")
 
 
 @pd.api.extensions.register_dataframe_accessor("petro")
@@ -73,14 +71,14 @@ class PetroAccessor:
     def __init__(self, pandas_obj):
         self._obj = pandas_obj
 
-    def search(self, s, on=None):
+    def search(self, s, on=None) -> pd.DataFrame:
         """Select subset of data from dataframe containing string s in index or column.
 
         Note: Works only with non-numeric index or column
 
         Args:
             s (str): Returns all rows which contain string s in index or column.
-            on: Name of column used for search. When `None` the index is used
+            on (str or None): Name of column used for search. When `None` the index is used
 
         Returns:
             Dataframe with selected data
@@ -100,15 +98,43 @@ class PetroAccessor:
             else:
                 raise NotTextualColumn(on)
 
-    def fix_columns(self, tmpl):
-        if tmpl not in COLNAMES:
-            raise TemplateNotDefined(tmpl)
-        return self._obj.rename(columns=COLNAMES[tmpl])
+    def fix_columns(self, template) -> pd.DataFrame:
+        """Rename columns according to predefined template.
 
-    def strip_columns(self):
+        Check `ppconfig['colnames']` for available templates. User-defined templates
+        could be added. Template is a dict used for `pandas.DataFrame.rename`.
+
+        Args:
+            template (str): Name of renaming template
+
+        Returns:
+            Dataframe with renamed columns
+        """
+        if template not in ppconfig["colnames"]:
+            raise TemplateNotDefined(template)
+        return self._obj.rename(columns=ppconfig["colnames"][template])
+
+    def strip_columns(self) -> pd.DataFrame:
+        """Strip whitespaces from column names
+
+        Returns:
+            Dataframe with stripped column names
+        """
         return self._obj.rename(columns=lambda x: x.strip())
 
-    def calc(self, expr):
+    def calc(self, expr, name=None) -> pd.DataFrame:
+        """Calculate a new column using expression
+
+        Evaluate a string describing operations on DataFrame columns.
+
+        Args:
+            expr (str): The expression string to evaluate.
+            name (str): Name of column to store result. When `None` the expression
+                is used as name.
+
+        Returns:
+            Dataframe with calculated column
+        """
         self._obj[expr] = self._obj.eval(expr)
         return self._obj
 

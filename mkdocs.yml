@@ -18,6 +18,8 @@ plugins:
           setup_commands:
             - import sys
             - sys.path.append('../')
+          options:
+            docstring_style: google
 theme:
   name: material
   feature:
