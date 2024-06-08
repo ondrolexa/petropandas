@@ -168,11 +168,13 @@ class OxidesAccessor:
             raise MissingColumns("oxides")
 
     @property
-    def props(self):
+    def props(self) -> pd.DataFrame:
+        """Returns properties of oxides in data."""
         return pd.DataFrame(self._oxides_props, index=self._oxides)
 
     @property
-    def _df(self):
+    def _df(self) -> pd.DataFrame:
+        """Returns dataframe with only oxides in columns."""
         return self._obj[self._oxides]
 
     def _final(self, df, **kwargs):
@@ -181,53 +183,161 @@ class OxidesAccessor:
             df = df[select]
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
-    def df(self, **kwargs):
+    def df(self, **kwargs) -> pd.DataFrame:
+        """Returns dataframe.
+
+        Keyword Args:
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with oxides and additional columns
+        """
         return self._final(self._df, **kwargs)
 
-    def mean(self, **kwargs):
+    def mean(self, **kwargs) -> pd.DataFrame:
+        """Return Dataframe with single row of arithmetic means of oxide columns"""
         return pd.DataFrame(self._df.mean(axis=0)).T
 
-    def scale(self, **kwargs):
+    def scale(self, **kwargs) -> pd.DataFrame:
+        """Normalize oxide values to given sum.
+
+        Keyword Args:
+            to (float): Sum of oxides. Default 100.0
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Scaled dataframe
+        """
         to = kwargs.get("to", 100.0)
         res = to * self._df.div(self._df.sum(axis=1), axis=0)
         return self._final(res, **kwargs)
 
-    def molprop(self, **kwargs):
+    def molprop(self, **kwargs) -> pd.DataFrame:
+        """Convert oxides weight percents to molar proportions.
+
+        Keyword Args:
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with molar proportions
+
+        """
         res = self._df.div(self.props["mass"])
         return self._final(res, **kwargs)
 
-    def cat_number(self, **kwargs):
+    def cat_number(self, **kwargs) -> pd.DataFrame:
+        """Calculate cations number.
+
+        Keyword Args:
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with molar proportions
+
+        """
         res = self.props["ncat"] * self._df.div(self.props["mass"])
         return self._final(res, **kwargs)
 
-    def oxy_number(self, **kwargs):
+    def oxy_number(self, **kwargs) -> pd.DataFrame:
+        """Calculate oxugens number.
+
+        Keyword Args:
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with molar proportions
+
+        """
         res = self.props["noxy"] * self._df.div(self.props["mass"])
         return self._final(res, **kwargs)
 
-    def onf(self, noxy, **kwargs):
+    def onf(self, noxy) -> pd.Series:
+        """Oxygen normalisation factor - ideal oxygens / sum of oxygens
+
+        Args:
+            noxy (int): ideal oxygens
+
+        Returns:
+            pandas.Series: oxygen normalisation factors
+
+        """
         return noxy / self.oxy_number(keep=[]).sum(axis=1)
 
-    def cnf(self, ncat, **kwargs):
+    def cnf(self, ncat) -> pd.Series:
+        """Cation normalisation factor - ideal cations / sum of cations
+
+        Args:
+            ncat (int): ideal cations
+
+        Returns:
+            pandas.Series: cation normalisation factors
+
+        """
         return ncat / self.cat_number(keep=[]).sum(axis=1)
 
-    def cations(self, **kwargs):
+    def cations(self, **kwargs) -> pd.DataFrame:
+        """Cations calculated on the basis of oxygens or cations.
+
+        Keyword Args:
+            noxy (int, optional): ideal number of oxygens. Default 1
+            ncat (int, optional): ideal number of cations. Default 1
+            tocat (bool, optional): when ``True`` normalized to ``ncat``,
+                otherwise to ``noxy``. Default ``False``
+
+        Returns:
+            Dataframe with calculated cations
+
+        """
         noxy = kwargs.get("noxy", 1)
         ncat = kwargs.get("ncat", 1)
         tocat = kwargs.get("tocat", False)
         if tocat:
-            df = self.cat_number.multiply(self.cnf(ncat), axis=0)
+            df = self.cat_number(keep=[]).multiply(self.cnf(ncat), axis=0)
             df.columns = [str(cat) for cat in self.props["cation"]]
             return self._final(df, **kwargs)
         else:
-            df = self.cat_number.multiply(self.onf(noxy), axis=0)
+            df = self.cat_number(keep=[]).multiply(self.onf(noxy), axis=0)
             df.columns = [str(cat) for cat in self.props["cation"]]
             return self._final(df, **kwargs)
 
-    def charges(self, ncat, **kwargs):
+    def charges(self, ncat, **kwargs) -> pd.DataFrame:
+        """Calculates charges based on number of cations.
+
+        Args:
+            ncat (int): number of cations
+
+        Keyword Args:
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with charges
+
+        """
         charge = self.cat_number(keep=[]).mul(self.cnf(ncat), axis=0) * self.props["charge"]
         return self._final(charge, **kwargs)
 
-    def apatite_correction(self, **kwargs):
+    def apatite_correction(self, **kwargs) -> pd.DataFrame:
+        """Apatite correction
+
+        Note:
+            All P2O5 is assumed to be apatite based and is removed from composition
+
+                CaO mol% = CaO mol% - (10 / 3) * P2O5 mol%
+
+        Keyword Args:
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Apatite corrected dataframe
+
+        """
         if ("P2O5" in self._oxides) and ("CaO" in self._oxides):
             df = self._df.div(self.props["mass"])
             df = df.div(df.sum(axis=1), axis=0)
@@ -240,7 +350,23 @@ class OxidesAccessor:
             print("Both CaO and P2O5 not in data. Nothing changed.")
             return self._final(self._df, **kwargs)
 
-    def convert_Fe(self, **kwargs):
+    def convert_Fe(self, **kwargs) -> pd.DataFrame:
+        """Recalculate FeO to Fe2O3 or vice-versa.
+
+        Note:
+            When only FeO exists, all is recalculated to Fe2O3. When only Fe2O3
+            exists, all is recalculated to FeO. When both exists, Fe2O3 is
+            recalculated and added to FeO. Otherwise datatable is not changed.
+
+        Keyword Args:
+            to (str): to what iron oxide Fe should be converted. Default `"FeO"`
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with converted Fe oxide
+
+        """
         to = kwargs.get("to", "FeO")
         if (to == "FeO") and ("Fe2O3" in self._oxides):
             Fe3to2 = 2 * formula("FeO").mass / formula("Fe2O3").mass
@@ -264,7 +390,25 @@ class OxidesAccessor:
             print("Both FeO and Fe2O3 not in data. Nothing changed.")
             return self._final(self._df, **kwargs)
 
-    def recalculate_Fe(self, noxy, ncat, **kwargs):
+    def recalculate_Fe(self, noxy, ncat, **kwargs) -> pd.DataFrame:
+        """Recalculate Fe based on charge balance.
+
+        Note:
+            Either both FeO and Fe2O3 are present or any of then, the composition
+            is modified to fullfil charge balance for given cations and oxygens.
+
+        Args:
+            noxy (int): ideal number of oxygens. Default 1
+            ncat (int): ideal number of cations. Default 1
+
+        Keyword Args:
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with recalculated Fe
+
+        """
         charge = self.cat_number(keep=[]).mul(self.cnf(ncat), axis=0)
         if ("Fe2O3" in self._oxides) & ("FeO" not in self._oxides):
             charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
@@ -277,7 +421,7 @@ class OxidesAccessor:
             mws = self.props["mass"]
             mws["FeO"] = formula("FeO").mass
         elif "Fe2O3" in self._oxides:
-            charge["Fe2O3"].loc[pd.isna(self.df["Fe2O3"])] = 0
+            charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
             chargedef = 2 * noxy - self.charges(ncat, keep=[]).sum(axis=1)
             toconv = chargedef.clip(lower=0, upper=charge["FeO"])
             charge["Fe2O3"] += toconv
