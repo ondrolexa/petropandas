@@ -9,6 +9,7 @@ from petropandas.pandas_accessors import (
     OxidesAccessor,
     PetroAccessor,
     REEAccessor,
+    pp_config,
 )
 
 __all__ = (
@@ -16,6 +17,7 @@ __all__ = (
     "plt",
     "pd",
     "sns",
+    "pp_config",
     "PetroAccessor",
     "ElementsAccessor",
     "OxidesAccessor",

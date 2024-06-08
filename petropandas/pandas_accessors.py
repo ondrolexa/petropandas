@@ -18,12 +18,17 @@ from petropandas.constants import (
     REE_PLOT,
 )
 
+pp_config = {
+    "isoplot_default_format": 2,
+    "colnames": COLNAMES,
+    "agecols": AGECOLS,
+    "isoplot_formats": ISOPLOT_FORMATS,
+    "ree_plot": REE_PLOT,
+}
+
 germ = importlib.resources.files("petropandas") / "data" / "germ.json"
 with open(germ) as fp:
-    standards = json.load(fp)
-
-
-ppconfig = {"isoplot_default_format": 2, "colnames": COLNAMES}
+    pp_config["reservoirs"] = json.load(fp)
 
 
 def oxideprops(f):
@@ -63,11 +68,13 @@ class NotTextualColumn(Exception):
 
 class TemplateNotDefined(Exception):
     def __init__(self, tmpl):
-        super().__init__(f"Column definition {tmpl} is not defined. Check `ppconfig['colnames']`")
+        super().__init__(f"Column definition {tmpl} is not defined. Check `pp_config['colnames']`")
 
 
 @pd.api.extensions.register_dataframe_accessor("petro")
 class PetroAccessor:
+    """Use `.petro` pandas dataframe accessor."""
+
     def __init__(self, pandas_obj):
         self._obj = pandas_obj
 
@@ -101,7 +108,7 @@ class PetroAccessor:
     def fix_columns(self, template) -> pd.DataFrame:
         """Rename columns according to predefined template.
 
-        Check `ppconfig['colnames']` for available templates. User-defined templates
+        Check `pp_config['colnames']` for available templates. User-defined templates
         could be added. Template is a dict used for `pandas.DataFrame.rename`.
 
         Args:
@@ -110,9 +117,9 @@ class PetroAccessor:
         Returns:
             Dataframe with renamed columns
         """
-        if template not in ppconfig["colnames"]:
+        if template not in pp_config["colnames"]:
             raise TemplateNotDefined(template)
-        return self._obj.rename(columns=ppconfig["colnames"][template])
+        return self._obj.rename(columns=pp_config["colnames"][template])
 
     def strip_columns(self) -> pd.DataFrame:
         """Strip whitespaces from column names
@@ -141,6 +148,8 @@ class PetroAccessor:
 
 @pd.api.extensions.register_dataframe_accessor("oxides")
 class OxidesAccessor:
+    """Use `.oxides` pandas dataframe accessor."""
+
     def __init__(self, pandas_obj):
         self._validate(pandas_obj)
         self._obj = pandas_obj
@@ -448,6 +457,8 @@ class OxidesAccessor:
 
 @pd.api.extensions.register_dataframe_accessor("elements")
 class ElementsAccessor:
+    """Use `.elements` pandas dataframe accessor."""
+
     def __init__(self, pandas_obj):
         self._validate(pandas_obj)
         self._obj = pandas_obj
@@ -475,7 +486,8 @@ class ElementsAccessor:
             raise MissingColumns("elements")
 
     @property
-    def props(self):
+    def props(self) -> pd.DataFrame:
+        """Returns properties of elements in data."""
         return pd.DataFrame(self._elements_props, index=self._elements)
 
     @property
@@ -488,12 +500,23 @@ class ElementsAccessor:
             df = df[select]
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
-    def df(self, **kwargs):
+    def df(self, **kwargs) -> pd.DataFrame:
+        """Returns dataframe.
+
+        Keyword Args:
+            select (list): list of elements to be included. Default all elements.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with elements and additional columns
+        """
         return self._final(self._df, **kwargs)
 
 
 @pd.api.extensions.register_dataframe_accessor("ree")
 class REEAccessor:
+    """Use `.ree` pandas dataframe accessor."""
+
     def __init__(self, pandas_obj):
         self._validate(pandas_obj)
         self._obj = pandas_obj
@@ -516,7 +539,8 @@ class REEAccessor:
             raise MissingColumns("REE")
 
     @property
-    def props(self):
+    def props(self) -> pd.DataFrame:
+        """Returns properties of REE in data."""
         return pd.DataFrame(self._ree_props, index=self._ree)
 
     @property
@@ -529,14 +553,40 @@ class REEAccessor:
             df = df[select]
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
-    def df(self, **kwargs):
+    def df(self, **kwargs) -> pd.DataFrame:
+        """Returns dataframe.
+
+        Keyword Args:
+            select (list): list of elements to be included. Default all elements.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with elements and additional columns
+        """
         return self._final(self._df, **kwargs)
 
-    def normalize(self, **kwargs):
+    def normalize(self, **kwargs) -> pd.DataFrame:
+        """Normalize REE by reservoir.
+
+        Note:
+            Predefined reservoirs are imported from
+            [GERM Reservoir Database](https://earthref.org/GERMRD/reservoirs/). You can
+            check all available reservoirs in `pp_config["reservoirs"]`.
+
+        Keyword Args:
+            reservoir (str): Name of reservoir. Deafult "CI Chondrites"
+            reference (str): Reference. Default "McDonough & Sun 1995"
+            source (str): Original source. Deafult same as reference.
+            select (list): list of elements to be included. Default all elements.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with normalized REE composition
+        """
         reservoir = kwargs.get("reservoir", "CI Chondrites")
         reference = kwargs.get("reference", "McDonough & Sun 1995")
         source = kwargs.get("source", reference)
-        nrm = pd.Series(standards[reservoir][reference][source])
+        nrm = pd.Series(pp_config["reservoirs"][reservoir][reference][source])
         res = self._df / nrm
         res = res[self._ree]
         res["Eu/Eu*"] = res["Eu"] / np.sqrt(res["Sm"] * res["Gd"])
@@ -545,7 +595,7 @@ class REEAccessor:
 
     def plot(self, **kwargs):
         if "select" not in kwargs:
-            kwargs["select"] = REE_PLOT
+            kwargs["select"] = pp_config["ree_plot"]
         fig, ax = plt.subplots()
         ax.set(yscale="log")
         ree = self.df(**kwargs).melt(
@@ -579,6 +629,8 @@ class REEAccessor:
 
 @pd.api.extensions.register_dataframe_accessor("isoplot")
 class IsoplotAccessor:
+    """Use `.isoplot` pandas dataframe accessor."""
+
     def __init__(self, pandas_obj):
         self._validate(pandas_obj)
         self._obj = pandas_obj
@@ -603,8 +655,22 @@ class IsoplotAccessor:
         return self._obj[self._isoplot]
 
     def clipboard(self, **kwargs):
-        iso = kwargs.get("iso", ppconfig["isoplot_default_format"])
-        df = self._df[ISOPLOT_FORMATS[iso]]
+        """Copy data to clipbord to be used in IsoplotR online.
+
+        Note:
+            [IsoplotR online](http://isoplotr.es.ucl.ac.uk/home/index.html)
+
+                Vermeesch, P., 2018, IsoplotR: a free and open toolbox for geochronology.
+                Geoscience Frontiers, v.9, p.1479-1493, doi: 10.1016/j.gsf.2018.04.001.
+
+        Keyword Args:
+            iso (int): IsoplotR format. Default `pp_config["isoplot_default_format"]`
+            C (str): Column to be used as color. Default None
+            omit (str): Column to be used as omit. Default None
+            comment (str): Column to be used as comment. Default None
+        """
+        iso = kwargs.get("iso", pp_config["isoplot_default_format"])
+        df = self._df[pp_config["isoplot_formats"][iso]]
         if "C" in kwargs:
             df["C"] = self._obj[kwargs["C"]]
         else:
@@ -619,17 +685,28 @@ class IsoplotAccessor:
             df["comment"] = None
         df.to_clipboard(header=False, index=False)
 
-    def calc_ages(self, **kwargs):
-        iso = kwargs.get("iso", ppconfig["isoplot_default_format"])
+    def calc_ages(self, **kwargs) -> pd.DataFrame:
+        """Copy data to clipbord, calc ages in IsoplotR online and paste back results.
+
+        Keyword Args:
+            iso (int): IsoplotR format. Default `pp_config["isoplot_default_format"]`
+            C (str): Column to be used as color. Default None
+            omit (str): Column to be used as omit. Default None
+            comment (str): Column to be used as comment. Default None
+
+        Returns:
+            Dataframe with calculated ages
+        """
+        iso = kwargs.get("iso", pp_config["isoplot_default_format"])
         self.clipboard(**kwargs)
         print(f"Data in format {iso} copied to clipboard")
         print("Calc ages with Sracey-Kramers, discordance and digits 3")
         input("Then copy to clipboard and press Enter to continue...")
         ages = pd.read_clipboard(header=None)
         if ages.shape[1] == 9:
-            ages.columns = AGECOLS
+            ages.columns = pp_config["agecols"]
             ages.index = self._obj.index
-            for col in AGECOLS:
+            for col in pp_config["agecols"]:
                 self._obj[col] = ages[col]
             print("Ages added to data")
         else:
