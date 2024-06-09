@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+import petropandas.minerals as mindb
 from petropandas.pandas_accessors import (
     ElementsAccessor,
     IsoplotAccessor,
@@ -23,4 +24,5 @@ __all__ = (
     "OxidesAccessor",
     "REEAccessor",
     "IsoplotAccessor",
+    "mindb",
 )

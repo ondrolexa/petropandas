@@ -8,6 +8,7 @@ import pyparsing
 import seaborn as sns
 from pandas.api.types import is_numeric_dtype
 from periodictable import formula, oxygen
+from periodictable.core import iselement, ision
 
 from petropandas.constants import (
     AGECOLS,
@@ -48,6 +49,7 @@ def oxideprops(f):
 def elementprops(f):
     return {
         "mass": f.mass,
+        "charge": f.charge,
     }
 
 
@@ -69,6 +71,11 @@ class NotTextualColumn(Exception):
 class TemplateNotDefined(Exception):
     def __init__(self, tmpl):
         super().__init__(f"Column definition {tmpl} is not defined. Check `pp_config['colnames']`")
+
+
+class NoEndMembers(Exception):
+    def __init__(self, mineral):
+        super().__init__(f"Mineral {mineral} has no endmembers method defined.")
 
 
 @pd.api.extensions.register_dataframe_accessor("petro")
@@ -454,6 +461,100 @@ class OxidesAccessor:
         res[df.columns] = df
         return self._final(res, **kwargs)
 
+    def endmembers(self, mineral, **kwargs) -> pd.DataFrame:
+        """Calculate endmembers proportions
+
+        Args:
+            mineral(Mineral): Mineral instance (see `petropandas.minerals`)
+
+        Keyword Args:
+            force (bool, optional): when True, remaining cations are added to last site
+            select (list): list of oxides to be included. Default all oxides.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with calculated endmembers
+
+        """
+        force = kwargs.get("force", False)
+        if mineral.has_endmembers:
+            if mineral.needsFe == "Fe2":
+                dt = self.convert_Fe(keep=[])
+            elif mineral.needsFe == "Fe3":
+                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat, keep=[])
+            else:
+                dt = self.df(keep=[])
+            cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
+            res = []
+            for _, row in cations.iterrows():
+                res.append(mineral.endmembers(row, force=force))
+            return self._final(pd.DataFrame(res, index=self._obj.index), **kwargs)
+        else:
+            raise NoEndMembers(mineral)
+
+
+@pd.api.extensions.register_dataframe_accessor("ions")
+class IonsAccessor:
+    """Use `.ions` pandas dataframe accessor."""
+
+    def __init__(self, pandas_obj):
+        self._validate(pandas_obj)
+        self._obj = pandas_obj
+
+    def _validate(self, obj):
+        # verify there is a ions column
+        valid = []
+        self._ions = []
+        self._ions_props = []
+        self._others = []
+        for col in obj.columns:
+            try:
+                f = formula(col)
+                if (len(f.atoms) == 1) and (is_numeric_dtype(obj[col].dtype)):
+                    if ision(next(iter(f.atoms.keys()))):
+                        valid.append(True)
+                        self._ions.append(col)
+                        self._ions_props.append(elementprops(f))
+                    else:
+                        valid.append(False)
+                        self._others.append(col)
+                else:
+                    valid.append(False)
+                    self._others.append(col)
+            except (ValueError, pyparsing.exceptions.ParseException):
+                valid.append(False)
+                self._others.append(col)
+        if not any(valid):
+            raise MissingColumns("ions")
+
+    @property
+    def props(self) -> pd.DataFrame:
+        """Returns properties of ions in data."""
+        return pd.DataFrame(self._ions_props, index=self._ions)
+
+    @property
+    def _df(self) -> pd.DataFrame:
+        """Returns dataframe with only ions in columns."""
+        return self._obj[self._ions]
+
+    def _final(self, df, **kwargs):
+        select = kwargs.get("select", [])
+        if select:
+            df = df[select]
+        return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
+
+    def df(self, **kwargs) -> pd.DataFrame:
+        """Returns dataframe.
+
+        Keyword Args:
+            select (list): list of ions to be included. Default all ions.
+            keep (list): list of additional columns to be included. Default all columns.
+
+        Returns:
+            Dataframe with ions and additional columns
+        """
+        return self._final(self._df, **kwargs)
+
 
 @pd.api.extensions.register_dataframe_accessor("elements")
 class ElementsAccessor:
@@ -473,9 +574,13 @@ class ElementsAccessor:
             try:
                 f = formula(col)
                 if (len(f.atoms) == 1) and (is_numeric_dtype(obj[col].dtype)):
-                    valid.append(True)
-                    self._elements.append(col)
-                    self._elements_props.append(elementprops(f))
+                    if iselement(next(iter(f.atoms.keys()))):
+                        valid.append(True)
+                        self._elements.append(col)
+                        self._elements_props.append(elementprops(f))
+                    else:
+                        valid.append(False)
+                        self._others.append(col)
                 else:
                     valid.append(False)
                     self._others.append(col)
