@@ -18,6 +18,7 @@ from petropandas.constants import (
     REE,
     REE_PLOT,
 )
+from petropandas.minerals import Mineral
 
 pp_config = {
     "isoplot_default_format": 2,
@@ -461,11 +462,11 @@ class OxidesAccessor:
         res[df.columns] = df
         return self._final(res, **kwargs)
 
-    def endmembers(self, mineral, **kwargs) -> pd.DataFrame:
+    def endmembers(self, mineral: Mineral, **kwargs) -> pd.DataFrame:
         """Calculate endmembers proportions
 
         Args:
-            mineral(Mineral): Mineral instance (see `petropandas.minerals`)
+            mineral: Mineral instance (see `petropandas.minerals`)
 
         Keyword Args:
             force (bool, optional): when True, remaining cations are added to last site

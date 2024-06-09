@@ -10,6 +10,7 @@ copyright: Maintained by Ondrej Lexa.
 nav:
   - Home: index.md
   - Accessors: accessors.md
+  - Minerals: minerals.md
 plugins:
   - search
   - mkdocstrings:

@@ -84,7 +84,7 @@ class StrucForm:
     Attributes:
         mineral (Mineral): mineral instance
         sites (list): list of sites
-        reminder (pandas.Series): None or remainder after site population
+        reminder (pandas.Series): None if not yet populated or remainder after site population
     """
 
     def __init__(self, mineral):
@@ -125,7 +125,7 @@ class StrucForm:
             return sites[0]
 
     @property
-    def apfu(self):
+    def apfu(self) -> pd.Series:
         """Calculate mineral atom p.f.u based on site occupancies
 
         Returns:
@@ -181,7 +181,7 @@ class Mineral:
     def has_structure(self):
         return hasattr(self, "structure")
 
-    def calculate(self, cations, force=False):
+    def calculate(self, cations, force=False) -> StrucForm:
         """Calculate structural formula from cations p.f.u
 
         Args:
@@ -212,7 +212,7 @@ class Mineral:
         sf.reminder = cations - occ
         return sf
 
-    def apfu(self, cations, force=False):
+    def apfu(self, cations, force=False) -> pd.Series:
         """Calculate mineral atom p.f.u based on site occupancies
 
         Args:
