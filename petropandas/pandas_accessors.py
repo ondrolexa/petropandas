@@ -197,7 +197,9 @@ class OxidesAccessor:
     def _final(self, df, **kwargs):
         select = kwargs.get("select", [])
         if select:
-            df = df[select]
+            df = df[df.columns.intersection(select)]
+            rest = df.columns.symmetric_difference(select).difference(df.columns)
+            df[rest] = np.nan
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
     def df(self, **kwargs) -> pd.DataFrame:
@@ -541,7 +543,9 @@ class IonsAccessor:
     def _final(self, df, **kwargs):
         select = kwargs.get("select", [])
         if select:
-            df = df[select]
+            df = df[df.columns.intersection(select)]
+            rest = df.columns.symmetric_difference(select).difference(df.columns)
+            df[rest] = np.nan
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
     def df(self, **kwargs) -> pd.DataFrame:
@@ -598,12 +602,15 @@ class ElementsAccessor:
 
     @property
     def _df(self):
+        """Returns dataframe with only elements in columns."""
         return self._obj[self._elements]
 
     def _final(self, df, **kwargs):
         select = kwargs.get("select", [])
         if select:
-            df = df[select]
+            df = df[df.columns.intersection(select)]
+            rest = df.columns.symmetric_difference(select).difference(df.columns)
+            df[rest] = np.nan
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
     def df(self, **kwargs) -> pd.DataFrame:
@@ -651,12 +658,15 @@ class REEAccessor:
 
     @property
     def _df(self):
+        """Returns dataframe with only REE in columns."""
         return self._obj[self._ree]
 
     def _final(self, df, **kwargs):
         select = kwargs.get("select", [])
         if select:
-            df = df[select]
+            df = df[df.columns.intersection(select)]
+            rest = df.columns.symmetric_difference(select).difference(df.columns)
+            df[rest] = np.nan
         return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
 
     def df(self, **kwargs) -> pd.DataFrame:
@@ -700,8 +710,22 @@ class REEAccessor:
         return self._final(res, **kwargs)
 
     def plot(self, **kwargs):
-        if "select" not in kwargs:
-            kwargs["select"] = pp_config["ree_plot"]
+        """Spiderplot of REE data.
+
+        Note:
+            List of REE used for plot could be set in `pp_config["ree_plot"]`
+
+        Keyword Args:
+            grouped (bool): When True aggegated data with confidence interval is drawn.
+                Default False
+            boxplot (bool): When True, boxplot for each REE is drawn. Default False
+            boxplot_props (dict): Additional arguments passed to `sns.boxplot`. Default
+                {}
+            hue (str or None): Name of columns used for colors.
+            title (str): Title of the plot. Default None
+            select (list): list of elements to be included. Default all elements.
+            keep (list): list of additional columns to be included. Default all columns.
+        """
         fig, ax = plt.subplots()
         ax.set(yscale="log")
         ree = self.df(**kwargs).melt(
@@ -709,11 +733,13 @@ class REEAccessor:
             var_name="ree",
             ignore_index=False,
         )
+        # select only REE for plotting
+        ree = ree.loc[ree["ree"].isin(pp_config["ree_plot"])]
         if kwargs.get("grouped", False):
             sns.lineplot(
+                data=ree,
                 x="ree",
                 y="value",
-                data=ree,
                 hue=kwargs.get("hue", None),
                 errorbar="ci",
                 legend="brief",
@@ -730,6 +756,18 @@ class REEAccessor:
                 legend="brief",
                 ax=ax,
             )
+        if kwargs.get("boxplot", False):
+            sns.boxplot(
+                data=ree,
+                x="ree",
+                y="value",
+                flierprops={"ms": 3},
+                ax=ax,
+                **kwargs.get("boxplot_props", {"color": "grey"}),
+            )
+        if "title" in kwargs:
+            ax.set_title(kwargs.get("title"))
+        ax.set_xlabel(None)
         plt.show()
 
 
@@ -758,6 +796,7 @@ class IsoplotAccessor:
 
     @property
     def _df(self):
+        """Returns dataframe with only IsoplotR variables in columns."""
         return self._obj[self._isoplot]
 
     def clipboard(self, **kwargs):
@@ -806,7 +845,7 @@ class IsoplotAccessor:
         iso = kwargs.get("iso", pp_config["isoplot_default_format"])
         self.clipboard(**kwargs)
         print(f"Data in format {iso} copied to clipboard")
-        print("Calc ages with Sracey-Kramers, discordance and digits 3")
+        print("Calc ages with Stacey-Kramers, discordance and digits 3")
         input("Then copy to clipboard and press Enter to continue...")
         ages = pd.read_clipboard(header=None)
         if ages.shape[1] == 9:

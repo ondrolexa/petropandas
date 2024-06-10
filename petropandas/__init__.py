@@ -6,6 +6,7 @@ import seaborn as sns
 import petropandas.minerals as mindb
 from petropandas.pandas_accessors import (
     ElementsAccessor,
+    IonsAccessor,
     IsoplotAccessor,
     OxidesAccessor,
     PetroAccessor,
@@ -18,11 +19,12 @@ __all__ = (
     "plt",
     "pd",
     "sns",
-    "pp_config",
-    "PetroAccessor",
     "ElementsAccessor",
-    "OxidesAccessor",
-    "REEAccessor",
+    "IonsAccessor",
     "IsoplotAccessor",
+    "OxidesAccessor",
+    "PetroAccessor",
+    "REEAccessor",
+    "pp_config",
     "mindb",
 )

@@ -9,7 +9,12 @@ copyright: Maintained by Ondrej Lexa.
 
 nav:
   - Home: index.md
-  - Accessors: accessors.md
+  - PetroAccessor: petro.md
+  - OxidesAccessor: oxides.md
+  - IonsAccessor: ions.md
+  - ElementsAccessor: elements.md
+  - REEAccessor: ree.md
+  - IsoplotAccessor: isoplot.md
   - Minerals: minerals.md
 plugins:
   - search
