@@ -720,10 +720,15 @@ class REEAccessor:
                 Default False
             boxplot (bool): When True, boxplot for each REE is drawn. Default False
             boxplot_props (dict): Additional arguments passed to `sns.boxplot`. Default
-                {}
+                `{"color": "grey"}`.
             hue (str or None): Name of columns used for colors.
+            palette (string, list, dict, or matplotlib.colors.Colormap): Method for
+                choosing the colors to use when mapping the hue semantic.
+            legend ("auto", "brief", "full", or False): How to draw the legend.
             title (str): Title of the plot. Default None
             select (list): list of elements to be included. Default all elements.
+            filename (str): If not none, plot is saved to file. Default None.
+            dpi (int): DPI used for `savefig`. Default 150.
             keep (list): list of additional columns to be included. Default all columns.
         """
         fig, ax = plt.subplots()
@@ -741,8 +746,9 @@ class REEAccessor:
                 x="ree",
                 y="value",
                 hue=kwargs.get("hue", None),
+                palette=kwargs.get("palette", None),
                 errorbar="ci",
-                legend="brief",
+                legend=kwargs.get("legend", "brief"),
                 ax=ax,
             )
         else:
@@ -751,9 +757,10 @@ class REEAccessor:
                 y="value",
                 data=ree,
                 hue=kwargs.get("hue", None),
+                palette=kwargs.get("palette", None),
                 units=ree.index,
                 estimator=None,
-                legend="brief",
+                legend=kwargs.get("legend", "brief"),
                 ax=ax,
             )
         if kwargs.get("boxplot", False):
@@ -768,7 +775,12 @@ class REEAccessor:
         if "title" in kwargs:
             ax.set_title(kwargs.get("title"))
         ax.set_xlabel(None)
-        plt.show()
+        if "filename" in kwargs:
+            fig.tight_layout()
+            fig.savefig(kwargs.get("filename"), dpi=kwargs.get("dpi", 150))
+            plt.close(fig)
+        else:
+            plt.show()
 
 
 @pd.api.extensions.register_dataframe_accessor("isoplot")
