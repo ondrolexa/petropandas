@@ -857,7 +857,7 @@ class IsoplotAccessor:
         iso = kwargs.get("iso", pp_config["isoplot_default_format"])
         self.clipboard(**kwargs)
         print(f"Data in format {iso} copied to clipboard")
-        print("Calc ages with Stacey-Kramers, discordance and digits 3")
+        print("Calc ages with Stacey-Kramers, discordance and digits 5")
         input("Then copy to clipboard and press Enter to continue...")
         ages = pd.read_clipboard(header=None)
         if ages.shape[1] == 9:
