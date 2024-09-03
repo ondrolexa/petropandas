@@ -857,7 +857,7 @@ class IsoplotAccessor:
         iso = kwargs.get("iso", pp_config["isoplot_default_format"])
         self.clipboard(**kwargs)
         print(f"Data in format {iso} copied to clipboard")
-        print("Calc ages with Stacey-Kramers, discordance and digits 3")
+        print("Calc ages with Stacey-Kramers, discordance and digits 5")
         input("Then copy to clipboard and press Enter to continue...")
         ages = pd.read_clipboard(header=None)
         if ages.shape[1] == 9:
@@ -867,7 +867,9 @@ class IsoplotAccessor:
                 self._obj[col] = ages[col]
             print("Ages added to data")
         else:
-            print("Wrong shape of data. Set correct options and try again.")
+            print(
+                f"Wrong shape {ages.shape} of copied data. Awaits {self._obj.shape} Set correct options and try again."
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover
