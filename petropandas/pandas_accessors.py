@@ -387,24 +387,30 @@ class OxidesAccessor:
 
         """
         to = kwargs.get("to", "FeO")
-        if (to == "FeO") and ("Fe2O3" in self._oxides):
-            Fe3to2 = 2 * formula("FeO").mass / formula("Fe2O3").mass
-            res = self._df.copy()
-            if "FeO" in self._oxides:
-                res["FeO"] += Fe3to2 * res["Fe2O3"]
-            else:
-                res["FeO"] = Fe3to2 * res["Fe2O3"]
-            res = res.drop(columns="Fe2O3")
-            return self._final(res, **kwargs)
-        elif (to == "Fe2O3") and ("FeO" in self._oxides):
-            Fe2to3 = formula("Fe2O3").mass / formula("FeO").mass / 2
-            res = self._df.copy()
+        if to == "FeO":
             if "Fe2O3" in self._oxides:
-                res["Fe2O3"] += Fe2to3 * res["FeO"]
+                Fe3to2 = 2 * formula("FeO").mass / formula("Fe2O3").mass
+                res = self._df.copy()
+                if "FeO" in self._oxides:
+                    res["FeO"] += Fe3to2 * res["Fe2O3"]
+                else:
+                    res["FeO"] = Fe3to2 * res["Fe2O3"]
+                res = res.drop(columns="Fe2O3")
+                return self._final(res, **kwargs)
             else:
-                res["Fe2O3"] = Fe2to3 * res["FeO"]
-            res = res.drop(columns="FeO")
-            return self._final(res, **kwargs)
+                return self._final(self._df, **kwargs)
+        elif to == "Fe2O3":
+            if "FeO" in self._oxides:
+                Fe2to3 = formula("Fe2O3").mass / formula("FeO").mass / 2
+                res = self._df.copy()
+                if "Fe2O3" in self._oxides:
+                    res["Fe2O3"] += Fe2to3 * res["FeO"]
+                else:
+                    res["Fe2O3"] = Fe2to3 * res["FeO"]
+                res = res.drop(columns="FeO")
+                return self._final(res, **kwargs)
+            else:
+                return self._final(self._df, **kwargs)
         else:
             print("Both FeO and Fe2O3 not in data. Nothing changed.")
             return self._final(self._df, **kwargs)
