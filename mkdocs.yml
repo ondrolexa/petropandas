@@ -1,6 +1,5 @@
 site_name: petropandas
 repo_url: https://github.com/ondrolexa/petropandas
-site_url: https://ondrolexa.github.io/petropandas
 site_description: Pandas accessors for petrologists
 site_author: Ondrej Lexa
 edit_uri: edit/main/docs/
