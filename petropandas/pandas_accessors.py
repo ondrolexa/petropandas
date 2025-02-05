@@ -71,7 +71,9 @@ class NotTextualColumn(Exception):
 
 class TemplateNotDefined(Exception):
     def __init__(self, tmpl):
-        super().__init__(f"Column definition {tmpl} is not defined. Check `pp_config['colnames']`")
+        super().__init__(
+            f"Column definition {tmpl} is not defined. Check `pp_config['colnames']`"
+        )
 
 
 class NoEndMembers(Exception):
@@ -338,7 +340,9 @@ class OxidesAccessor:
             Dataframe with charges
 
         """
-        charge = self.cat_number(keep=[]).mul(self.cnf(ncat), axis=0) * self.props["charge"]
+        charge = (
+            self.cat_number(keep=[]).mul(self.cnf(ncat), axis=0) * self.props["charge"]
+        )
         return self._final(charge, **kwargs)
 
     def apatite_correction(self, **kwargs) -> pd.DataFrame:
@@ -466,7 +470,11 @@ class OxidesAccessor:
             return self._final(self._df, **kwargs)
         res = self._df.copy()
         ncharge = charge / ncat
-        df = ncharge.mul(mws).mul(self.cat_number(keep=[]).sum(axis=1), axis="rows").div(ncats)
+        df = (
+            ncharge.mul(mws)
+            .mul(self.cat_number(keep=[]).sum(axis=1), axis="rows")
+            .div(ncats)
+        )
         res[df.columns] = df
         return self._final(res, **kwargs)
 
@@ -871,6 +879,7 @@ class IsoplotAccessor:
             ages.index = self._obj.index
             for col in pp_config["agecols"]:
                 self._obj[col] = ages[col]
+                self._validate(self._obj)
             print("Ages added to data")
         else:
             print(
