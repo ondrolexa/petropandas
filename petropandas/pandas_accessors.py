@@ -1,15 +1,17 @@
 import importlib.resources
 import json
 
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pyparsing
 import seaborn as sns
+from matplotlib.ticker import MaxNLocator
 from pandas.api.types import is_numeric_dtype
 from periodictable import oxygen
-from periodictable.formulas import formula
 from periodictable.core import iselement, ision
+from periodictable.formulas import formula
 
 from petropandas.constants import (
     AGECOLS,
@@ -157,6 +159,138 @@ class PetroAccessor:
         """
         self._obj[expr] = self._obj.eval(expr)
         return self._obj
+
+
+@pd.api.extensions.register_dataframe_accessor("petroplots")
+class PetroPlotsAccessor:
+    """Use `.petroplots` pandas dataframe accessor."""
+
+    def __init__(self, pandas_obj):
+        self._obj = pandas_obj
+
+    def garnet_profile(
+        self,
+        cols=["Alm"],
+        cols_extra=["Prp", "Sps", "Grs"],
+        twin=True,
+        margin=0.1,
+        lim=None,
+        lim_extra=None,
+        filename=None,
+        maxticks=20,
+        percents=False,
+        use_index=False,
+        xlabel=None,
+        xticks_rotation=0,
+        marker="o",
+        ms=4,
+    ):
+        """Plot garnet profiles.
+
+        Note:
+            Endmembers have to be properly ordered.
+
+        Args:
+            use_index (bool, optional): When True, xticks are derived from DataFrame
+                index, otherwise ticks are sequential. Default False
+            xticks_rotation (float, optional): Rotation of xtick labels. Default 0
+            twin (bool, optional): When ``True``, the plot has two independent y-axes
+                for better scaling. Endmembers must be separated into two groups using
+                `cols` and `cols_extra` args. When ``False`` both groups are plotted on
+                same axes. Default ``True``
+            cols (list, optional): list of endmember names in first group. Default
+                `["Alm"]`
+            cols_extra (list, optional): list of endmember names in second group.
+                Default `["Prp", "Grs", "Sps"]`
+            lim (tuple, optional): y-axis limits for first axis or auto when
+                ``None``. Default ``None``
+            lim_extra (tuple, optional): y-axis limits for second axis or auto when
+                ``None``. Default ``None``
+            percents (bool): When ``True`` y-axes scale is percents, otherwise fraction
+            xlabel (str, optional): label of the x-axis. Default auto.
+            filename (str, optional): When not ``None``, the plot is saved to file,
+                otherwise the plot is shown.
+            maxticks (int, optional): maximum number of ticks on x-axis. Default 20
+            xticks_rotation (int, optional): rotation of xticks labels. Default 0
+            marker (str, optional): marker. Default "o"
+            ms (float, optional): marker size. Default 4
+
+        """
+        em = self._obj.copy()
+        colors1 = list(mcolors.TABLEAU_COLORS.keys())[: len(cols)]
+        colors2 = list(mcolors.TABLEAU_COLORS.keys())[
+            len(cols) : len(cols) + len(cols_extra)
+        ]
+        fig, ax1 = plt.subplots()
+        if percents:
+            multiple = 100
+            unit = " [%]"
+        else:
+            multiple = 1
+            unit = " [fraction]"
+        if use_index:
+            xvals = em.index
+            xlabel = "index" if xlabel is None else xlabel
+        else:
+            xvals = range(len(em))
+            xlabel = "position" if xlabel is None else xlabel
+        ax1.set_xlabel(xlabel)
+        if twin:
+            ax1.set_ylabel(" ".join(cols) + unit)
+            h1 = ax1.plot(xvals, multiple * em[cols], marker=marker, ms=ms)
+            for h, color in zip(h1, colors1):
+                h.set_color(color)
+            if lim is not None:
+                ax1.set_ylim(lim[0], lim[1])
+            else:
+                ax1.set_ymargin(margin)
+            ax2 = ax1.twinx()
+            ax2.set_ylabel(" ".join(cols_extra) + unit)
+            h2 = ax2.plot(xvals, multiple * em[cols_extra], marker=marker, ms=ms)
+            for h, color in zip(h2, colors2):
+                h.set_color(color)
+            if lim_extra is not None:
+                ax2.set_ylim(lim_extra[0], lim_extra[1])
+            else:
+                ax2.set_ymargin(margin)
+            plt.legend(
+                h1 + h2,
+                cols + cols_extra,
+                bbox_to_anchor=(0.0, 1.02, 1.0, 0.102),
+                loc=3,
+                ncol=len(cols + cols_extra),
+                mode="expand",
+                borderaxespad=0.0,
+            )
+        else:
+            ax1.set_ylabel(unit)
+            h1 = ax1.plot(xvals, multiple * em[cols + cols_extra], marker=marker, ms=ms)
+            for h, color in zip(h1, colors1 + colors2):
+                h.set_color(color)
+            if lim is not None:
+                ax1.set_ylim(lim[0], lim[1])
+            else:
+                ax1.set_ymargin(margin)
+            plt.legend(
+                h1,
+                cols + cols_extra,
+                bbox_to_anchor=(0.0, 1.02, 1.0, 0.102),
+                loc=3,
+                ncol=len(cols + cols_extra),
+                mode="expand",
+                borderaxespad=0.0,
+            )
+        # Find at most maxticks ticks on the x-axis at 'nice' locations
+        xloc = MaxNLocator(maxticks - 1, integer=True)
+        ax1.xaxis.set_major_locator(xloc)
+        ax1.tick_params(axis="x", labelrotation=xticks_rotation)
+        fig.tight_layout()
+        if filename is not None:
+            fig.savefig(filename)
+            print(f"{filename} saved.")
+            plt.close(fig)
+        else:
+            plt.show()
 
 
 @pd.api.extensions.register_dataframe_accessor("oxides")
@@ -719,7 +853,10 @@ class IonsAccessor:
             df = df[df.columns.intersection(select)]
             rest = df.columns.symmetric_difference(select).difference(df.columns)
             df[rest] = np.nan
-        return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
+        keep = kwargs.get("keep", [])
+        if keep == "all":
+            keep = self._others
+        return pd.concat([df, self._obj[keep]], axis=1)
 
     def df(self, **kwargs) -> pd.DataFrame:
         """Returns dataframe.
@@ -784,7 +921,10 @@ class ElementsAccessor:
             df = df[df.columns.intersection(select)]
             rest = df.columns.symmetric_difference(select).difference(df.columns)
             df[rest] = np.nan
-        return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
+        keep = kwargs.get("keep", [])
+        if keep == "all":
+            keep = self._others
+        return pd.concat([df, self._obj[keep]], axis=1)
 
     def df(self, **kwargs) -> pd.DataFrame:
         """Returns dataframe.
@@ -840,7 +980,10 @@ class REEAccessor:
             df = df[df.columns.intersection(select)]
             rest = df.columns.symmetric_difference(select).difference(df.columns)
             df[rest] = np.nan
-        return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
+        keep = kwargs.get("keep", [])
+        if keep == "all":
+            keep = self._others
+        return pd.concat([df, self._obj[keep]], axis=1)
 
     def df(self, **kwargs) -> pd.DataFrame:
         """Returns dataframe.

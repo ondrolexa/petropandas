@@ -11,8 +11,14 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
 
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.0
+    hooks:
+      - id: isort
+        name: isort (python)
+
   - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 24.8.0
+    rev: 25.1.0
     hooks:
       - id: black
         args: [--line-length=88]
@@ -33,7 +39,7 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: ./.venv/bin/pytest
+        entry: ./.venv/bin/pytest  --nbval-lax
         language: system
         types: [python]
         pass_filenames: false
