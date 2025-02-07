@@ -1,7 +1,6 @@
-import pandas as pd
 import pytest
 
-from petropandas import ElementsAccessor, OxidesAccessor, REEAccessor  # noqa: F401
+from petropandas import pd  # noqa: F401
 
 
 @pytest.fixture

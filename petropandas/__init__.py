@@ -1,31 +1,11 @@
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-import seaborn as sns
 
 import petropandas.minerals as mindb
-from petropandas.pandas_accessors import (
-    ElementsAccessor,
-    IonsAccessor,
-    IsoplotAccessor,
-    OxidesAccessor,
-    PetroAccessor,
-    REEAccessor,
-    pp_config,
-)
+import petropandas.pandas_accessors as pd_accessors
 
 __all__ = (
-    "np",
-    "plt",
     "pd",
-    "sns",
-    "ElementsAccessor",
-    "IonsAccessor",
-    "IsoplotAccessor",
-    "OxidesAccessor",
-    "PetroAccessor",
-    "REEAccessor",
-    "pp_config",
+    "pd_accessors",
     "mindb",
 )
 

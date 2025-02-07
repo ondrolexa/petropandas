@@ -9,7 +9,7 @@ import pyparsing
 import seaborn as sns
 from matplotlib.ticker import MaxNLocator
 from pandas.api.types import is_numeric_dtype
-from periodictable import oxygen
+from periodictable import elements
 from periodictable.core import iselement, ision
 from periodictable.formulas import formula
 
@@ -23,7 +23,7 @@ from petropandas.constants import (
 )
 from petropandas.minerals import Mineral
 
-pp_config = {
+config = {
     "isoplot_default_format": 2,
     "colnames": COLNAMES,
     "agecols": AGECOLS,
@@ -33,12 +33,12 @@ pp_config = {
 
 germ = importlib.resources.files("petropandas").joinpath("data", "germ.json")
 with germ.open() as fp:
-    pp_config["reservoirs"] = json.load(fp)
+    config["reservoirs"] = json.load(fp)
 
 
 def oxideprops(f):
     ncat, element = f.structure[0]
-    noxy = f.atoms[oxygen]
+    noxy = f.atoms[elements.name("oxygen")]
     charge = 2 * noxy // ncat
     return {
         "mass": f.mass,
@@ -75,7 +75,7 @@ class NotTextualColumn(Exception):
 class TemplateNotDefined(Exception):
     def __init__(self, tmpl):
         super().__init__(
-            f"Column definition {tmpl} is not defined. Check `pp_config['colnames']`"
+            f"Column definition {tmpl} is not defined. Check `config['colnames']`"
         )
 
 
@@ -123,7 +123,7 @@ class PetroAccessor:
     def fix_columns(self, template) -> pd.DataFrame:
         """Rename columns according to predefined template.
 
-        Check `pp_config['colnames']` for available templates. User-defined templates
+        Check `config['colnames']` for available templates. User-defined templates
         could be added. Template is a dict used for `pandas.DataFrame.rename`.
 
         Args:
@@ -132,9 +132,9 @@ class PetroAccessor:
         Returns:
             Dataframe with renamed columns
         """
-        if template not in pp_config["colnames"]:
+        if template not in config["colnames"]:
             raise TemplateNotDefined(template)
-        return self._obj.rename(columns=pp_config["colnames"][template])
+        return self._obj.rename(columns=config["colnames"][template])
 
     def strip_columns(self) -> pd.DataFrame:
         """Strip whitespaces from column names
@@ -310,7 +310,7 @@ class OxidesAccessor:
         for col in obj.columns:
             try:
                 f = formula(col)
-                if (len(f.atoms) == 2) and (oxygen in f.atoms):
+                if (len(f.atoms) == 2) and (elements.name("oxygen") in f.atoms):
                     valid.append(True)
                     self._oxides.append(col)
                     self._oxides_props.append(oxideprops(f))
@@ -1003,7 +1003,7 @@ class REEAccessor:
         Note:
             Predefined reservoirs are imported from
             [GERM Reservoir Database](https://earthref.org/GERMRD/reservoirs/). You can
-            check all available reservoirs in `pp_config["reservoirs"]`.
+            check all available reservoirs in `config["reservoirs"]`.
 
         Keyword Args:
             reservoir (str): Name of reservoir. Deafult "CI Chondrites"
@@ -1018,7 +1018,7 @@ class REEAccessor:
         reservoir = kwargs.get("reservoir", "CI Chondrites")
         reference = kwargs.get("reference", "McDonough & Sun 1995")
         source = kwargs.get("source", reference)
-        nrm = pd.Series(pp_config["reservoirs"][reservoir][reference][source])
+        nrm = pd.Series(config["reservoirs"][reservoir][reference][source])
         res = self._df / nrm
         res = res[self._ree]
         res["Eu/Eu*"] = res["Eu"] / np.sqrt(res["Sm"] * res["Gd"])
@@ -1029,7 +1029,7 @@ class REEAccessor:
         """Spiderplot of REE data.
 
         Note:
-            List of REE used for plot could be set in `pp_config["ree_plot"]`
+            List of REE used for plot could be set in `config["ree_plot"]`
 
         Keyword Args:
             grouped (bool): When True aggegated data with confidence interval is drawn.
@@ -1055,7 +1055,7 @@ class REEAccessor:
             ignore_index=False,
         )
         # select only REE for plotting
-        ree = ree.loc[ree["ree"].isin(pp_config["ree_plot"])]
+        ree = ree.loc[ree["ree"].isin(config["ree_plot"])]
         if kwargs.get("grouped", False):
             sns.lineplot(
                 data=ree,
@@ -1138,13 +1138,13 @@ class IsoplotAccessor:
                 Geoscience Frontiers, v.9, p.1479-1493, doi: 10.1016/j.gsf.2018.04.001.
 
         Keyword Args:
-            iso (int): IsoplotR format. Default `pp_config["isoplot_default_format"]`
+            iso (int): IsoplotR format. Default `config["isoplot_default_format"]`
             C (str): Column to be used as color. Default None
             omit (str): Column to be used as omit. Default None
             comment (str): Column to be used as comment. Default None
         """
-        iso = kwargs.get("iso", pp_config["isoplot_default_format"])
-        df = self._df[pp_config["isoplot_formats"][iso]]
+        iso = kwargs.get("iso", config["isoplot_default_format"])
+        df = self._df[config["isoplot_formats"][iso]]
         if "C" in kwargs:
             df["C"] = self._obj[kwargs["C"]]
         else:
@@ -1163,7 +1163,7 @@ class IsoplotAccessor:
         """Copy data to clipbord, calc ages in IsoplotR online and paste back results.
 
         Keyword Args:
-            iso (int): IsoplotR format. Default `pp_config["isoplot_default_format"]`
+            iso (int): IsoplotR format. Default `config["isoplot_default_format"]`
             C (str): Column to be used as color. Default None
             omit (str): Column to be used as omit. Default None
             comment (str): Column to be used as comment. Default None
@@ -1171,16 +1171,16 @@ class IsoplotAccessor:
         Returns:
             Dataframe with calculated ages
         """
-        iso = kwargs.get("iso", pp_config["isoplot_default_format"])
+        iso = kwargs.get("iso", config["isoplot_default_format"])
         self.clipboard(**kwargs)
         print(f"Data in format {iso} copied to clipboard")
         print("Calc ages with Stacey-Kramers, discordance and digits 5")
         input("Then copy to clipboard and press Enter to continue...")
         ages = pd.read_clipboard(header=None)
         if ages.shape[1] == 9:
-            ages.columns = pp_config["agecols"]
+            ages.columns = config["agecols"]
             ages.index = self._obj.index
-            for col in pp_config["agecols"]:
+            for col in config["agecols"]:
                 self._obj[col] = ages[col]
                 self._validate(self._obj)
             print("Ages added to data")
