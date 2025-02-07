@@ -7,7 +7,8 @@ import pandas as pd
 import pyparsing
 import seaborn as sns
 from pandas.api.types import is_numeric_dtype
-from periodictable import formula, oxygen
+from periodictable import oxygen
+from periodictable.formulas import formula
 from periodictable.core import iselement, ision
 
 from petropandas.constants import (
@@ -28,8 +29,8 @@ pp_config = {
     "ree_plot": REE_PLOT,
 }
 
-germ = importlib.resources.files("petropandas") / "data" / "germ.json"
-with open(germ) as fp:
+germ = importlib.resources.files("petropandas").joinpath("data", "germ.json")
+with germ.open() as fp:
     pp_config["reservoirs"] = json.load(fp)
 
 
@@ -88,14 +89,16 @@ class PetroAccessor:
     def __init__(self, pandas_obj):
         self._obj = pandas_obj
 
-    def search(self, s, on=None) -> pd.DataFrame:
+    def search(self, s, on=None, regex=True) -> pd.DataFrame:
         """Select subset of data from dataframe containing string s in index or column.
 
         Note: Works only with non-numeric index or column
 
         Args:
             s (str): Returns all rows which contain string s in index or column.
-            on (str or None): Name of column used for search. When `None` the index is used
+            on (str, optional): Name of column used for search. When `None` the index is used
+            regex (bool, optional): If True, assumes the pat is a regular expression. If False,
+                treats the pat as a literal string.
 
         Returns:
             Dataframe with selected data
@@ -108,7 +111,7 @@ class PetroAccessor:
             col = self._obj[on]
         if not is_numeric_dtype(col):
             col = pd.Series([str(v) for v in col], index=self._obj.index)
-            return self._obj.loc[col.str.contains(s)].copy()
+            return self._obj.loc[col.str.contains(s, regex=regex).fillna(False)].copy()
         else:
             if on is None:
                 raise NotTextualIndex()
@@ -189,7 +192,7 @@ class OxidesAccessor:
     @property
     def props(self) -> pd.DataFrame:
         """Returns properties of oxides in data."""
-        return pd.DataFrame(self._oxides_props, index=self._oxides)
+        return pd.DataFrame(self._oxides_props, index=pd.Index(self._oxides))
 
     @property
     def _df(self) -> pd.DataFrame:
@@ -202,14 +205,17 @@ class OxidesAccessor:
             df = df[df.columns.intersection(select)]
             rest = df.columns.symmetric_difference(select).difference(df.columns)
             df[rest] = np.nan
-        return pd.concat([df, self._obj[kwargs.get("keep", self._others)]], axis=1)
+        keep = kwargs.get("keep", [])
+        if keep == "all":
+            keep = self._others
+        return pd.concat([df, self._obj[keep]], axis=1)
 
     def df(self, **kwargs) -> pd.DataFrame:
         """Returns dataframe.
 
         Keyword Args:
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with oxides and additional columns
@@ -226,7 +232,7 @@ class OxidesAccessor:
         Keyword Args:
             to (float): Sum of oxides. Default 100.0
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Scaled dataframe
@@ -240,7 +246,7 @@ class OxidesAccessor:
 
         Keyword Args:
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with molar proportions
@@ -254,7 +260,7 @@ class OxidesAccessor:
 
         Keyword Args:
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with molar proportions
@@ -268,7 +274,7 @@ class OxidesAccessor:
 
         Keyword Args:
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with molar proportions
@@ -287,7 +293,7 @@ class OxidesAccessor:
             pandas.Series: oxygen normalisation factors
 
         """
-        return noxy / self.oxy_number(keep=[]).sum(axis=1)
+        return noxy / self.oxy_number().sum(axis=1)
 
     def cnf(self, ncat) -> pd.Series:
         """Cation normalisation factor - ideal cations / sum of cations
@@ -299,7 +305,7 @@ class OxidesAccessor:
             pandas.Series: cation normalisation factors
 
         """
-        return ncat / self.cat_number(keep=[]).sum(axis=1)
+        return ncat / self.cat_number().sum(axis=1)
 
     def cations(self, **kwargs) -> pd.DataFrame:
         """Cations calculated on the basis of oxygens or cations.
@@ -318,11 +324,11 @@ class OxidesAccessor:
         ncat = kwargs.get("ncat", 1)
         tocat = kwargs.get("tocat", False)
         if tocat:
-            df = self.cat_number(keep=[]).multiply(self.cnf(ncat), axis=0)
+            df = self.cat_number().multiply(self.cnf(ncat), axis=0)
             df.columns = [str(cat) for cat in self.props["cation"]]
             return self._final(df, **kwargs)
         else:
-            df = self.cat_number(keep=[]).multiply(self.onf(noxy), axis=0)
+            df = self.cat_number().multiply(self.onf(noxy), axis=0)
             df.columns = [str(cat) for cat in self.props["cation"]]
             return self._final(df, **kwargs)
 
@@ -334,15 +340,13 @@ class OxidesAccessor:
 
         Keyword Args:
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included.Default [].
 
         Returns:
             Dataframe with charges
 
         """
-        charge = (
-            self.cat_number(keep=[]).mul(self.cnf(ncat), axis=0) * self.props["charge"]
-        )
+        charge = self.cat_number().mul(self.cnf(ncat), axis=0) * self.props["charge"]
         return self._final(charge, **kwargs)
 
     def apatite_correction(self, **kwargs) -> pd.DataFrame:
@@ -355,7 +359,7 @@ class OxidesAccessor:
 
         Keyword Args:
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Apatite corrected dataframe
@@ -384,7 +388,7 @@ class OxidesAccessor:
         Keyword Args:
             to (str): to what iron oxide Fe should be converted. Default `"FeO"`
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with converted Fe oxide
@@ -432,16 +436,16 @@ class OxidesAccessor:
 
         Keyword Args:
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with recalculated Fe
 
         """
-        charge = self.cat_number(keep=[]).mul(self.cnf(ncat), axis=0)
+        charge = self.cat_number().mul(self.cnf(ncat), axis=0)
         if ("Fe2O3" in self._oxides) & ("FeO" not in self._oxides):
             charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
-            chargedef = 2 * noxy - self.charges(ncat, keep=[]).sum(axis=1)
+            chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             toconv = chargedef
             charge["Fe2O3"] += toconv
             charge["FeO"] = -toconv
@@ -451,14 +455,14 @@ class OxidesAccessor:
             mws["FeO"] = formula("FeO").mass
         elif "Fe2O3" in self._oxides:
             charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
-            chargedef = 2 * noxy - self.charges(ncat, keep=[]).sum(axis=1)
+            chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             toconv = chargedef.clip(lower=0, upper=charge["FeO"])
             charge["Fe2O3"] += toconv
             charge["FeO"] = charge["FeO"] - toconv
             ncats = self.props["ncat"]
             mws = self.props["mass"]
         elif "FeO" in self._oxides:
-            chargedef = 2 * noxy - self.charges(ncat, keep=[]).sum(axis=1)
+            chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             charge["Fe2O3"] = chargedef.clip(lower=0, upper=charge["FeO"])
             charge["FeO"] = charge["FeO"] - charge["Fe2O3"]
             ncats = self.props["ncat"].copy()
@@ -470,11 +474,7 @@ class OxidesAccessor:
             return self._final(self._df, **kwargs)
         res = self._df.copy()
         ncharge = charge / ncat
-        df = (
-            ncharge.mul(mws)
-            .mul(self.cat_number(keep=[]).sum(axis=1), axis="rows")
-            .div(ncats)
-        )
+        df = ncharge.mul(mws).mul(self.cat_number().sum(axis=1), axis="rows").div(ncats)
         res[df.columns] = df
         return self._final(res, **kwargs)
 
@@ -487,7 +487,7 @@ class OxidesAccessor:
         Keyword Args:
             force (bool, optional): when True, remaining cations are added to last site
             select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with calculated endmembers
@@ -496,11 +496,11 @@ class OxidesAccessor:
         force = kwargs.get("force", False)
         if mineral.has_endmembers:
             if mineral.needsFe == "Fe2":
-                dt = self.convert_Fe(keep=[])
+                dt = self.convert_Fe()
             elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat, keep=[])
+                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat)
             else:
-                dt = self.df(keep=[])
+                dt = self.df()
             cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
             res = []
             for _, row in cations.iterrows():
@@ -508,6 +508,175 @@ class OxidesAccessor:
             return self._final(pd.DataFrame(res, index=self._obj.index), **kwargs)
         else:
             raise NoEndMembers(mineral)
+
+    def TCbulk(self, **kwargs) -> None:
+        """Print oxides formatted as THERMOCALC bulk script
+
+        Note:
+            The CaO is recalculate using apatite correction based on P205 if available.
+
+        Args:
+            H2O (float): wt% of water. When -1 the amount is calculated as 100 - Total
+                Default -1.
+            oxygen (float): value to calculate moles of ferric iron.
+                Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
+            system (str): axfile to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
+                'KFMASH', 'NCKFMASHTOCr', 'NCKFMASTOCr'. Default 'MnNCKFMASHTO'
+
+        """
+        H2O = kwargs.get("H2O", -1)
+        oxygen = kwargs.get("oxygen", 0.01)
+        system = kwargs.get("system", "MnNCKFMASHTO")
+        # fmt: off
+        bulk = {
+            "MnNCKFMASHTO": ["H2O", "SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "MnO", "O"],
+            "NCKFMASHTO": ["H2O", "SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O"],
+            "KFMASH": ["H2O", "SiO2", "Al2O3", "MgO", "FeO", "K2O"],
+            "NCKFMASHTOCr": ["H2O", "SiO2", "Al2O3", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3"],
+            "NCKFMASTOCr": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "TiO2", "O", "Cr2O3"],
+        }
+        # fmt: on
+        assert system in bulk, "Not valid system"
+
+        df = self.convert_Fe().oxides.apatite_correction()
+        # Water
+        if "H2O" in bulk[system]:
+            if "H2O" not in df:
+                if H2O == -1:
+                    H2O = 100 - df.sum(axis=1)
+                    H2O[H2O < 0] = 0
+                else:
+                    H2O = H2O * df.sum(axis=1) / (100 - H2O)
+                df["H2O"] = H2O
+        use = df.columns.intersection(bulk[system])
+        df = df[use].oxides.molprop().oxides.scale(to=100 - oxygen)
+        if "O" in bulk[system]:
+            df["O"] = oxygen
+        # add missing
+        for lbl in bulk[system]:
+            if lbl not in df:
+                df[lbl] = 0.0
+        print("bulk" + "".join([f"{lbl:>7}" for lbl in bulk[system]]))
+        for ix, row in df[bulk[system]].iterrows():
+            print("bulk" + "".join([f" {v:6.3f}" for v in row.values]) + f"  % {ix}")
+
+    def Perplexbulk(self, **kwargs) -> None:
+        """Print oxides formatted as PerpleX thermodynamic component list
+
+        Note:
+            The CaO is recalculate using apatite correction based on P205 if available.
+
+        Args:
+            H2O (float): wt% of water. When -1 the amount is calculated as 100 - Total
+                Default -1.
+            oxygen (float): value to calculate moles of ferric iron.
+                Moles FeO = FeOtot - O and moles Fe2O3 = O. Default 0.01
+            system (str): axfile to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
+                'KFMASH', 'NCKFMASHTOCr', 'NCKFMASTOCr'. Default 'MnNCKFMASHTO'
+
+        """
+        H2O = kwargs.get("H2O", -1)
+        oxygen = kwargs.get("oxygen", 0.01)
+        system = kwargs.get("system", "MnNCKFMASHTO")
+        # fmt: off
+        bulk = {
+            "MnNCKFMASHTO": ["H2O", "SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "MnO", "O2"],
+            "NCKFMASHTO": ["H2O", "SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O2"],
+            "KFMASH": ["H2O", "SiO2", "Al2O3", "MgO", "FeO", "K2O"],
+            "NCKFMASHTOCr": ["H2O", "SiO2", "Al2O3", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O2", "Cr2O3"],
+            "NCKFMASTOCr": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "TiO2", "O2", "Cr2O3"],
+        }
+        # fmt: on
+        assert system in bulk, "Not valid system"
+
+        df = self.convert_Fe().oxides.apatite_correction()
+        # Water
+        if "H2O" in bulk[system]:
+            if "H2O" not in df:
+                if H2O == -1:
+                    H2O = 100 - df.sum(axis=1)
+                    H2O[H2O < 0] = 0
+                else:
+                    H2O = H2O * df.sum(axis=1) / (100 - H2O)
+                df["H2O"] = H2O
+        use = df.columns.intersection(bulk[system])
+        df = df[use].oxides.molprop().oxides.scale(to=100 - oxygen)
+        if "O2" in bulk[system]:
+            df["O2"] = 2 * oxygen
+        # add missing
+        for lbl in bulk[system]:
+            if lbl not in df:
+                df[lbl] = 0.0
+        print("begin thermodynamic component list")
+        for ox, val in df[bulk[system]].iloc[0].items():
+            print(f"{ox:6s}1 {val:8.5f}      0.00000      0.00000     molar amount")
+        print("end thermodynamic component list")
+
+    def MAGEMin(self, **kwargs) -> None:
+        """Print oxides formatted as MAGEMin bulk file
+
+        Note:
+            The CaO is recalculate using apatite correction based on P205 if available.
+
+        Args:
+            H2O (float): wt% of water. When -1 the amount is calculated as 100 - Total
+                Default -1.
+            oxygen (float): value to calculate moles of ferric iron.
+                Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
+            db (str): MAGEMin database. 'mp' metapelite (White et al. 2014), 'mb' metabasite
+                (Green et al. 2016), 'ig' igneous (Holland et al. 2018), 'um' ultramafic
+                (Evans & Frost 2021), 'ume' ultramafic extended (Evans & Frost 2021 + pl, hb and aug
+                from Green et al. 2016), 'mpe' Metapelite extended (White et al. 2014,
+                Green et al. 2016, Evans & Frost 2021), 'mtl' mantle (Holland et al. 2013).
+                Default is "mp"
+            sys_in (str): system comp "wt" or "mol". Default is "mol"
+
+        """
+        H2O = kwargs.get("H2O", -1)
+        oxygen = kwargs.get("oxygen", 0.01)
+        db = kwargs.get("db", "mp")
+        sys_in = kwargs.get("sys_in", "mol")
+        # fmt: off
+        bulk = {
+            "ig": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3", "H2O"],
+            "mp": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "MnO", "H2O"],
+            "mb": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "H2O"],
+            "um": ["SiO2", "Al2O3", "MgO", "FeO", "O", "H2O", "S"],
+            "ume": ["SiO2", "Al2O3", "MgO", "FeO", "O", "H2O", "S", "CaO", "Na2O"],
+            "mpe": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "MnO", "H2O", "CO2", "S"],
+            "mtl": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "Na2O"],
+        }
+        # fmt: on
+        assert db in bulk, "Not valid database"
+
+        df = self.convert_Fe().oxides.apatite_correction()
+        # Water
+        if "H2O" in bulk[db]:
+            if "H2O" not in df:
+                if H2O == -1:
+                    H2O = 100 - df.sum(axis=1)
+                    H2O[H2O < 0] = 0
+                else:
+                    H2O = H2O * df.sum(axis=1) / (100 - H2O)
+                df["H2O"] = H2O
+        use = df.columns.intersection(bulk[db])
+        if sys_in == "mol":
+            df = df[use].oxides.molprop().oxides.scale(to=100 - oxygen)
+        else:
+            df = df[use].oxides.scale(to=100 - oxygen)
+        if "O" in bulk[db]:
+            df["O"] = oxygen
+        # add missing
+        for lbl in bulk[db]:
+            if lbl not in df:
+                df[lbl] = 0.0
+        print("# HEADER")
+        print("title; comments; db; sysUnit; oxide; frac; frac2")
+        print("# BULK-ROCK COMPOSITION")
+        for ix, row in df[bulk[db]].iterrows():
+            oxides = ", ".join(row.keys())
+            values = ", ".join([f"{val:.3f}" for val in row.values])
+            print(f"{ix};{'petropandas'};{db};{sys_in};[{oxides}];[{values}];")
 
 
 @pd.api.extensions.register_dataframe_accessor("ions")
@@ -547,7 +716,7 @@ class IonsAccessor:
     @property
     def props(self) -> pd.DataFrame:
         """Returns properties of ions in data."""
-        return pd.DataFrame(self._ions_props, index=self._ions)
+        return pd.DataFrame(self._ions_props, index=pd.Index(self._ions))
 
     @property
     def _df(self) -> pd.DataFrame:
@@ -567,7 +736,7 @@ class IonsAccessor:
 
         Keyword Args:
             select (list): list of ions to be included. Default all ions.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with ions and additional columns
@@ -612,7 +781,7 @@ class ElementsAccessor:
     @property
     def props(self) -> pd.DataFrame:
         """Returns properties of elements in data."""
-        return pd.DataFrame(self._elements_props, index=self._elements)
+        return pd.DataFrame(self._elements_props, index=pd.Index(self._elements))
 
     @property
     def _df(self):
@@ -632,7 +801,7 @@ class ElementsAccessor:
 
         Keyword Args:
             select (list): list of elements to be included. Default all elements.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with elements and additional columns
@@ -668,7 +837,7 @@ class REEAccessor:
     @property
     def props(self) -> pd.DataFrame:
         """Returns properties of REE in data."""
-        return pd.DataFrame(self._ree_props, index=self._ree)
+        return pd.DataFrame(self._ree_props, index=pd.Index(self._ree))
 
     @property
     def _df(self):
@@ -688,7 +857,7 @@ class REEAccessor:
 
         Keyword Args:
             select (list): list of elements to be included. Default all elements.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with elements and additional columns
@@ -708,7 +877,7 @@ class REEAccessor:
             reference (str): Reference. Default "McDonough & Sun 1995"
             source (str): Original source. Deafult same as reference.
             select (list): list of elements to be included. Default all elements.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with normalized REE composition
@@ -743,7 +912,7 @@ class REEAccessor:
             select (list): list of elements to be included. Default all elements.
             filename (str): If not none, plot is saved to file. Default None.
             dpi (int): DPI used for `savefig`. Default 150.
-            keep (list): list of additional columns to be included. Default all columns.
+            keep (list): list of additional columns to be included. Default [].
         """
         fig, ax = plt.subplots()
         ax.set(yscale="log")
@@ -786,12 +955,13 @@ class REEAccessor:
                 ax=ax,
                 **kwargs.get("boxplot_props", {"color": "grey"}),
             )
-        if "title" in kwargs:
-            ax.set_title(kwargs.get("title"))
-        ax.set_xlabel(None)
+        ax.set_title(kwargs.get("title", ""))
+        ax.set_xlabel("")
         if "filename" in kwargs:
             fig.tight_layout()
-            fig.savefig(kwargs.get("filename"), dpi=kwargs.get("dpi", 150))
+            fig.savefig(
+                kwargs.get("filename", "ree_plot.pdf"), dpi=kwargs.get("dpi", 150)
+            )
             plt.close(fig)
         else:
             plt.show()
@@ -856,7 +1026,7 @@ class IsoplotAccessor:
             df["comment"] = None
         df.to_clipboard(header=False, index=False)
 
-    def calc_ages(self, **kwargs) -> pd.DataFrame:
+    def calc_ages(self, **kwargs) -> pd.DataFrame | None:
         """Copy data to clipbord, calc ages in IsoplotR online and paste back results.
 
         Keyword Args:

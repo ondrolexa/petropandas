@@ -28,3 +28,5 @@ __all__ = (
     "pp_config",
     "mindb",
 )
+
+__version__ = "0.1.1"

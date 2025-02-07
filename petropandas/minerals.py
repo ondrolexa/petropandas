@@ -84,16 +84,16 @@ class StrucForm:
     Attributes:
         mineral (Mineral): mineral instance
         sites (list): list of sites
-        reminder (pandas.Series): None if not yet populated or remainder after site population
+        reminder (pandas.Series): remainder after site population or empty
     """
 
     def __init__(self, mineral):
         self.mineral = mineral
         self.sites = [Site(*s) for s in self.mineral.structure]
-        self.reminder = None
+        self.reminder = pd.Series()
 
     def __repr__(self):
-        if self.reminder is not None:
+        if not self.reminder.empty:
             res = ""
             for site in sorted(self.sites, key=lambda site: site.name):
                 s = ""
@@ -131,8 +131,10 @@ class StrucForm:
         Returns:
             pandas.Series: atoms p.f.u
         """
-        if self.reminder is not None:
-            apfu = pd.Series([self.get(e) for e in self.reminder.index], index=self.reminder.index)
+        if not self.reminder.empty:
+            apfu = pd.Series(
+                [self.get(e) for e in self.reminder.index], index=self.reminder.index
+            )
             # Add atoms not in analysis
             for site in self.sites:
                 for atom in site.candidates:
@@ -144,7 +146,7 @@ class StrucForm:
 
     def check_stechiometry(self):
         """Calculate average missfit of populated and ideal cations on sites"""
-        if self.reminder is not None:
+        if not self.reminder.empty:
             return np.mean([abs(s.free) / s.ncat for s in self.sites])
         else:
             raise MineralNotCalculated()
@@ -167,11 +169,17 @@ class Mineral:
     """
 
     def __init__(self):
-        if self.has_structure:
-            self.ncat = sum([s[1] for s in self.structure])
+        # Subclasses should define this!
+        self.structure = ()
+        self.noxy = 0
+        self.needsFe = False
 
     def __repr__(self):
         return type(self).__name__
+
+    @property
+    def ncat(self):
+        return sum([s[1] for s in self.structure])
 
     @property
     def has_endmembers(self):
@@ -179,7 +187,10 @@ class Mineral:
 
     @property
     def has_structure(self):
-        return hasattr(self, "structure")
+        return self.structure != ()
+
+    def endmembers(self, cations, force=False):
+        raise NotImplementedError("Subclasses should implement this!")
 
     def calculate(self, cations, force=False) -> StrucForm:
         """Calculate structural formula from cations p.f.u
@@ -229,6 +240,7 @@ class Garnet_Fe2(Mineral):
     """Garnet using total Fe with 4 endmembers"""
 
     def __init__(self):
+        super().__init__()
         self.noxy = 12
         self.needsFe = "Fe2"
         # fmt: off
@@ -238,7 +250,6 @@ class Garnet_Fe2(Mineral):
             ("X", 3, ["Y{3+}", "Mg{2+}", "Fe{2+}", "Mn{2+}", "Ca{2+}", "Na{+}"]),
         )
         # fmt: on
-        super().__init__()
 
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)
@@ -256,6 +267,7 @@ class Garnet(Mineral):
     """Garnet using Fe2 and Fe3 with 6 endmembers"""
 
     def __init__(self):
+        super().__init__()
         self.noxy = 12
         self.needsFe = "Fe3"
         # fmt: off
@@ -265,7 +277,6 @@ class Garnet(Mineral):
             ("X", 3, ["Y{3+}", "Mg{2+}", "Fe{2+}", "Mn{2+}", "Ca{2+}", "Na{+}"]),
         )
         # fmt: on
-        super().__init__()
 
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)
@@ -288,13 +299,13 @@ class Feldspar(Mineral):
     """Feldspar with 3 endmembers"""
 
     def __init__(self):
+        super().__init__()
         self.noxy = 8
         self.needsFe = None
         self.structure = (
             ("T", 4, ["Si{4+}", "Al{3+}"]),
             ("A", 1, ["K{+}", "Na{+}", "Ca{2+}"]),
         )
-        super().__init__()
 
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)
@@ -311,6 +322,7 @@ class Pyroxene_Fe2(Mineral):
     """Pyroxen using total Fe with 3 endmembers"""
 
     def __init__(self):
+        super().__init__()
         self.noxy = 6
         self.needsFe = "Fe2"
         self.structure = (
@@ -318,7 +330,6 @@ class Pyroxene_Fe2(Mineral):
             ("M1", 1, ["Al{3+}", "Ti{4+}", "Cr{3+}", "Mn{2+}", "Mg{2+}", "Fe{2+}"]),
             ("M2", 1, ["Mg{2+}", "Fe{2+}", "Ca{2+}", "Na{+}", "K{+}"]),
         )
-        super().__init__()
 
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)
@@ -335,6 +346,7 @@ class Pyroxene(Mineral):
     """Pyroxene with Na-Cr with 6 endmembers"""
 
     def __init__(self):
+        super().__init__()
         self.noxy = 6
         self.needsFe = "Fe3"
         # fmt: off
@@ -344,7 +356,6 @@ class Pyroxene(Mineral):
             ("M2", 1, ["Mg{2+}", "Fe{2+}", "Ca{2+}", "Na{+}", "K{+}"]),
         )
         # fmt: on
-        super().__init__()
 
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)

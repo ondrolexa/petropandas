@@ -1,22 +1,20 @@
 [project]
 name = "petropandas"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Pandas accessors for petrologists"
 readme = "README.md"
 repository = "https://github.com/ondrolexa/petropandas"
 maintainers = [{ name = "Ondrej Lexa", email = "lexa.ondrej@gmail.com" }]
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "PyQt6",
     "numpy",
     "matplotlib",
-    "scipy",
     "pandas",
     "seaborn",
     "pyparsing",
@@ -28,21 +26,17 @@ dependencies = [
 [project.optional-dependencies]
 extra = ["jupyterlab"]
 tests = ["pytest", "pytest-cov"]
-docs = [
-    "mkdocs",
-    "mkdocs-material",
-    "mkdocstrings[python]",
-]
-dev = [
-    "black",
-    "jupyterlab",
-    "pytest",
-    "pytest-cov",
-    "mkdocs",
-    "mkdocs-material",
-    "mkdocstrings[python]",
-]
+docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]"]
+dev = ["petropandas[extra,tests,docs]", "black"]
 
+[project.urls]
+Homepage = "https://github.com/ondrolexa/petropandas"
+Documentation = "https://petropandas.readthedocs.io/"
+Repository = "https://github.com/ondrolexa/petropandas.git"
+Issues = "https://github.com/ondrolexa/petropandas/issues"
+
+[tool.hatch.version]
+path = "petropandas/__init__.py"
 
 [build-system]
 requires = ["hatchling"]
@@ -50,7 +44,6 @@ build-backend = "hatchling.build"
 
 [tool.black]
 line-length = 88
-extend-exclude = '''.*ui_.*'''
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
