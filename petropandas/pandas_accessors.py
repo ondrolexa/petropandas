@@ -509,24 +509,21 @@ class OxidesAccessor:
         else:
             raise NoEndMembers(mineral)
 
-    def TCbulk(self, **kwargs) -> None:
+    def TCbulk(self, H2O=-1, oxygen=0.01, system="MnNCKFMASHTO") -> None:
         """Print oxides formatted as THERMOCALC bulk script
 
         Note:
             The CaO is recalculate using apatite correction based on P205 if available.
 
         Args:
-            H2O (float): wt% of water. When -1 the amount is calculated as 100 - Total
-                Default -1.
-            oxygen (float): value to calculate moles of ferric iron.
+            H2O (float, optional): wt% of water. When -1 the amount is calculated
+                as 100 - Total. Default -1.
+            oxygen (float, optional): value to calculate moles of ferric iron.
                 Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
-            system (str): axfile to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
+            system (str, optional): axfile to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
                 'KFMASH', 'NCKFMASHTOCr', 'NCKFMASTOCr'. Default 'MnNCKFMASHTO'
 
         """
-        H2O = kwargs.get("H2O", -1)
-        oxygen = kwargs.get("oxygen", 0.01)
-        system = kwargs.get("system", "MnNCKFMASHTO")
         # fmt: off
         bulk = {
             "MnNCKFMASHTO": ["H2O", "SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "MnO", "O"],
@@ -560,24 +557,21 @@ class OxidesAccessor:
         for ix, row in df[bulk[system]].iterrows():
             print("bulk" + "".join([f" {v:6.3f}" for v in row.values]) + f"  % {ix}")
 
-    def Perplexbulk(self, **kwargs) -> None:
+    def Perplexbulk(self, H2O=-1, oxygen=0.01, system="MnNCKFMASHTO") -> None:
         """Print oxides formatted as PerpleX thermodynamic component list
 
         Note:
             The CaO is recalculate using apatite correction based on P205 if available.
 
         Args:
-            H2O (float): wt% of water. When -1 the amount is calculated as 100 - Total
-                Default -1.
-            oxygen (float): value to calculate moles of ferric iron.
-                Moles FeO = FeOtot - O and moles Fe2O3 = O. Default 0.01
-            system (str): axfile to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
+            H2O (float, optional): wt% of water. When -1 the amount is calculated
+                as 100 - Total. Default -1.
+            oxygen (float, optional): value to calculate moles of ferric iron.
+                Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
+            system (str): system to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
                 'KFMASH', 'NCKFMASHTOCr', 'NCKFMASTOCr'. Default 'MnNCKFMASHTO'
 
         """
-        H2O = kwargs.get("H2O", -1)
-        oxygen = kwargs.get("oxygen", 0.01)
-        system = kwargs.get("system", "MnNCKFMASHTO")
         # fmt: off
         bulk = {
             "MnNCKFMASHTO": ["H2O", "SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "MnO", "O2"],
@@ -612,30 +606,26 @@ class OxidesAccessor:
             print(f"{ox:6s}1 {val:8.5f}      0.00000      0.00000     molar amount")
         print("end thermodynamic component list")
 
-    def MAGEMin(self, **kwargs) -> None:
+    def MAGEMin(self, H2O=-1, oxygen=0.01, db="mp", sys_in="mol") -> None:
         """Print oxides formatted as MAGEMin bulk file
 
         Note:
             The CaO is recalculate using apatite correction based on P205 if available.
 
         Args:
-            H2O (float): wt% of water. When -1 the amount is calculated as 100 - Total
-                Default -1.
-            oxygen (float): value to calculate moles of ferric iron.
+            H2O (float, optional): wt% of water. When -1 the amount is calculated
+                as 100 - Total. Default -1.
+            oxygen (float, optional): value to calculate moles of ferric iron.
                 Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
-            db (str): MAGEMin database. 'mp' metapelite (White et al. 2014), 'mb' metabasite
+            db (str, optional): MAGEMin database. 'mp' metapelite (White et al. 2014), 'mb' metabasite
                 (Green et al. 2016), 'ig' igneous (Holland et al. 2018), 'um' ultramafic
                 (Evans & Frost 2021), 'ume' ultramafic extended (Evans & Frost 2021 + pl, hb and aug
                 from Green et al. 2016), 'mpe' Metapelite extended (White et al. 2014,
                 Green et al. 2016, Evans & Frost 2021), 'mtl' mantle (Holland et al. 2013).
                 Default is "mp"
-            sys_in (str): system comp "wt" or "mol". Default is "mol"
+            sys_in (str, optional): system comp "wt" or "mol". Default is "mol"
 
         """
-        H2O = kwargs.get("H2O", -1)
-        oxygen = kwargs.get("oxygen", 0.01)
-        db = kwargs.get("db", "mp")
-        sys_in = kwargs.get("sys_in", "mol")
         # fmt: off
         bulk = {
             "ig": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3", "H2O"],

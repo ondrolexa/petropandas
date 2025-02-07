@@ -26,7 +26,7 @@ dependencies = [
 [project.optional-dependencies]
 extra = ["jupyterlab"]
 tests = ["pytest", "pytest-cov"]
-docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]"]
+docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]", "mkdocs-jupyter"]
 dev = ["petropandas[extra,tests,docs]", "black"]
 
 [project.urls]
