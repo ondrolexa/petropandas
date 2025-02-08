@@ -1,97 +1,22 @@
-REE = [
-    "La",
-    "Ce",
-    "Pr",
-    "Nd",
-    "Pm",
-    "Sm",
-    "Eu",
-    "Gd",
-    "Tb",
-    "Dy",
-    "Ho",
-    "Er",
-    "Tm",
-    "Yb",
-    "Lu",
-    "Sc",
-    "Y",
-]
+# fmt: off
+REE = ["La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Sc", "Y"]
 
-REE_PLOT = [
-    "La",
-    "Ce",
-    "Pr",
-    "Nd",
-    "Sm",
-    "Eu",
-    "Gd",
-    "Tb",
-    "Dy",
-    "Ho",
-    "Er",
-    "Tm",
-    "Yb",
-    "Lu",
-]
+REE_PLOT = ["La", "Ce", "Pr", "Nd", "Sm", "Eu", "Gd",  "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu"]
 
 ISOPLOT = [
-    "07/35",
-    "06/38",
-    "38/06",
-    "07/06",
-    "04/38",
-    "04/06",
-    "04/07",
-    "08/32",
-    "32/38",
-    "08/06",
-    "35/07",
-    "08/07",
-    "07/35_Err",
-    "06/38_Err",
-    "38/06_Err",
-    "07/06_Err",
-    "04/38_Err",
-    "04/06_Err",
-    "04/07_Err",
-    "08/32_Err",
-    "32/38_Err",
-    "08/06_Err",
-    "35/07_Err",
-    "08/07_Err",
-    "RhoXY",
-    "RhoXZ",
-    "RhoYZ",
+    "07/35", "06/38", "38/06", "07/06", "04/38", "04/06", "04/07", "08/32", "32/38", "08/06", "35/07", "08/07",
+    "07/35_Err", "06/38_Err", "38/06_Err", "07/06_Err", "04/38_Err", "04/06_Err", "04/07_Err", "08/32_Err", "32/38_Err", "08/06_Err", "35/07_Err", "08/07_Err",
+    "RhoXY", "RhoXZ", "RhoYZ"
 ]
 
 ISOPLOT_FORMATS = {
     1: ["07/35", "07/35_Err", "06/38", "06/38_Err", "RhoXY"],
     2: ["38/06", "38/06_Err", "07/06", "07/06_Err", "RhoXY"],
-    3: [
-        "07/35",
-        "07/35_Err",
-        "06/38",
-        "06/38_Err",
-        "07/06",
-        "07/06_Err",
-        "RhoXY",
-        "RhoYZ",
-    ],
+    3: ["07/35", "07/35_Err", "06/38", "06/38_Err", "07/06", "07/06_Err", "RhoXY", "RhoYZ"],
 }
 
-AGECOLS = [
-    "Age75",
-    "Age75_Err",
-    "Age68",
-    "Age68_Err",
-    "Age76",
-    "Age76_Err",
-    "BestAge",
-    "BestAge_Err",
-    "Disc",
-]
-
+AGECOLS = ["Age75", "Age75_Err", "Age68", "Age68_Err", "Age76", "Age76_Err", "BestAge", "BestAge_Err", "Disc"]
+# fmt: on
 COLNAMES = {
     "SB": {
         "238U/206Pb": "38/06",
