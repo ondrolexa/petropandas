@@ -1,24 +1,29 @@
 import importlib.resources
+
 import pandas as pd
 
-res = importlib.resources.files("petropandas").joinpath("data", "oxides")
+res = importlib.resources.files("petropandas").joinpath("data")
 
-src = res.joinpath("avgpelite.csv")
+src = res.joinpath("oxides", "avgpelite.csv")
 with importlib.resources.as_file(src) as f:
     avgpelite = pd.read_csv(f)
 
-src = res.joinpath("bulk.csv")
+src = res.joinpath("oxides", "bulk.csv")
 with importlib.resources.as_file(src) as f:
     bulk = pd.read_csv(f)
 
-src = res.joinpath("grt_profile.csv")
+src = res.joinpath("oxides", "grt_profile.csv")
 with importlib.resources.as_file(src) as f:
     grt_profile = pd.read_csv(f)
 
-src = res.joinpath("minerals.csv")
+src = res.joinpath("oxides", "minerals.csv")
 with importlib.resources.as_file(src) as f:
     minerals = pd.read_csv(f)
 
-src = res.joinpath("pyroxenes.csv")
+src = res.joinpath("oxides", "pyroxenes.csv")
 with importlib.resources.as_file(src) as f:
     pyroxenes = pd.read_csv(f)
+
+src = res.joinpath("mnz", "sbdata.csv")
+with importlib.resources.as_file(src) as f:
+    mnz_sb = pd.read_csv(f)

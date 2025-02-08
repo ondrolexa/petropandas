@@ -11,6 +11,7 @@ nav:
   - Tutorial: notebooks/tutorial.ipynb
   - PetroAccessor: petro.md
   - OxidesAccessor: oxides.md
+  - PetroPlotsAccessor: plots.md
   - IonsAccessor: ions.md
   - ElementsAccessor: elements.md
   - REEAccessor: ree.md
@@ -24,6 +25,10 @@ plugins:
         python:
           options:
             docstring_style: google
+            show_bases: false
+            inherited_members: true
+            members_order: source
+            group_by_category: true
 theme:
   name: material
   feature:

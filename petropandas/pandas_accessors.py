@@ -1,7 +1,6 @@
 import importlib.resources
 import json
 
-import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -91,20 +90,24 @@ class PetroAccessor:
     def __init__(self, pandas_obj):
         self._obj = pandas_obj
 
-    def search(self, s, on=None, regex=True) -> pd.DataFrame:
+    def search(self, s, **kwargs) -> pd.DataFrame:
         """Select subset of data from dataframe containing string s in index or column.
 
         Note: Works only with non-numeric index or column
 
         Args:
             s (str): Returns all rows which contain string s in index or column.
-            on (str, optional): Name of column used for search. When `None` the index is used
-            regex (bool, optional): If True, assumes the pat is a regular expression. If False,
+
+        Keyword Args:
+            on (str): Name of column used for search. When `None` the index is used
+            regex (bool): If True, assumes the pat is a regular expression. If False,
                 treats the pat as a literal string.
 
         Returns:
             Dataframe with selected data
         """
+        on = kwargs.get("on", None)
+        regex = kwargs.get("regex", True)
         if on is None:
             col = self._obj.index
         else:
@@ -168,52 +171,51 @@ class PetroPlotsAccessor:
     def __init__(self, pandas_obj):
         self._obj = pandas_obj
 
-    def garnet_profile(
-        self,
-        cols=["Alm"],
-        cols_extra=["Prp", "Sps", "Grs"],
-        twin=True,
-        margin=0.1,
-        lim=None,
-        lim_extra=None,
-        filename=None,
-        maxticks=20,
-        percents=False,
-        use_index=False,
-        xlabel=None,
-        xticks_rotation=0,
-        markers=False,
-    ):
+    def garnet_profile(self, **kwargs):
         """Plot garnet profiles.
 
         Note:
             Endmembers have to be properly ordered.
 
-        Args:
-            use_index (bool, optional): When True, xticks are derived from DataFrame
+        Keyword Args:
+            use_index (bool): When True, xticks are derived from DataFrame
                 index, otherwise ticks are sequential. Default False
-            xticks_rotation (float, optional): Rotation of xtick labels. Default 0
-            twin (bool, optional): When ``True``, the plot has two independent y-axes
+            xticks_rotation (float): Rotation of xtick labels. Default 0
+            twin (bool): When ``True``, the plot has two independent y-axes
                 for better scaling. Endmembers must be separated into two groups using
                 `cols` and `cols_extra` args. When ``False`` both groups are plotted on
                 same axes. Default ``True``
-            cols (list, optional): list of endmember names in first group. Default
+            cols (list): list of endmember names in first group. Default
                 `["Alm"]`
-            cols_extra (list, optional): list of endmember names in second group.
+            cols_extra (list): list of endmember names in second group.
                 Default `["Prp", "Grs", "Sps"]`
-            lim (tuple, optional): y-axis limits for first axis or auto when
+            lim (tuple): y-axis limits for first axis or auto when
                 ``None``. Default ``None``
-            lim_extra (tuple, optional): y-axis limits for second axis or auto when
+            lim_extra (tuple): y-axis limits for second axis or auto when
                 ``None``. Default ``None``
             percents (bool): When ``True`` y-axes scale is percents, otherwise fraction
-            xlabel (str, optional): label of the x-axis. Default auto.
-            filename (str, optional): When not ``None``, the plot is saved to file,
+            xlabel (str): label of the x-axis. Default auto.
+            filename (str): When not ``None``, the plot is saved to file,
                 otherwise the plot is shown.
-            maxticks (int, optional): maximum number of ticks on x-axis. Default 20
-            xticks_rotation (int, optional): rotation of xticks labels. Default 0
-            markers (bool, optional): Show markers. Default False
+            maxticks (int): maximum number of ticks on x-axis. Default 20
+            xticks_rotation (int): rotation of xticks labels. Default 0
+            markers (bool): Show markers. Default False
 
         """
+        cols = kwargs.get("", ["Alm"])
+        cols_extra = kwargs.get("", ["Prp", "Sps", "Grs"])
+        twin = kwargs.get("", True)
+        margin = kwargs.get("", 0.1)
+        lim = kwargs.get("", None)
+        lim_extra = kwargs.get("", None)
+        filename = kwargs.get("", None)
+        maxticks = kwargs.get("", 20)
+        percents = kwargs.get("", False)
+        use_index = kwargs.get("", False)
+        xlabel = kwargs.get("", None)
+        xticks_rotation = kwargs.get("", 0)
+        markers = kwargs.get("", False)
+
         em = self._obj.copy()
         colors = sns.color_palette(None, len(cols) + len(cols_extra))
         fig, ax1 = plt.subplots()
@@ -297,27 +299,66 @@ class PetroPlotsAccessor:
             plt.show()
 
 
-@pd.api.extensions.register_dataframe_accessor("oxides")
-class OxidesAccessor:
-    """Use `.oxides` pandas dataframe accessor."""
+class AccessorTemplate:
+    """Base class"""
 
     def __init__(self, pandas_obj):
+        self._names = []
+        self._others = []
+        self._names_props = []
         self._validate(pandas_obj)
         self._obj = pandas_obj
+
+    @property
+    def _df(self) -> pd.DataFrame:
+        """Returns dataframe with appropriate columns."""
+        return self._obj[self._names]
+
+    def _validate(self, obj):
+        raise NotImplementedError
+
+    def _final(self, df, **kwargs) -> pd.DataFrame:
+        # select = kwargs.get("select", [])
+        # if select:
+        #     df = df[df.columns.intersection(select)]
+        #     rest = df.columns.symmetric_difference(select).difference(df.columns)
+        #     df[rest] = np.nan
+        keep = kwargs.get("keep", [])
+        if keep == "all":
+            keep = self._others
+        return pd.concat([df, self._obj[keep]], axis=1)
+
+    @property
+    def props(self) -> pd.DataFrame:
+        """Returns properties of oxides in data."""
+        return pd.DataFrame(self._names_props, index=pd.Index(self._names))
+
+    def df(self, **kwargs) -> pd.DataFrame:
+        """Returns dataframe.
+
+        Keyword Args:
+            keep (list): list of additional columns to be included. Default [].
+
+        Returns:
+            Dataframe
+        """
+        return self._final(self._df, **kwargs)
+
+
+@pd.api.extensions.register_dataframe_accessor("oxides")
+class OxidesAccessor(AccessorTemplate):
+    """Use `.oxides` pandas dataframe accessor."""
 
     def _validate(self, obj):
         # verify there is a oxides column
         valid = []
-        self._oxides = []
-        self._oxides_props = []
-        self._others = []
         for col in obj.columns:
             try:
                 f = formula(col)
                 if (len(f.atoms) == 2) and (elements.name("oxygen") in f.atoms):
                     valid.append(True)
-                    self._oxides.append(col)
-                    self._oxides_props.append(oxideprops(f))
+                    self._names.append(col)
+                    self._names_props.append(oxideprops(f))
                 else:
                     valid.append(False)
                     self._others.append(col)
@@ -326,39 +367,6 @@ class OxidesAccessor:
                 self._others.append(col)
         if not any(valid):
             raise MissingColumns("oxides")
-
-    @property
-    def props(self) -> pd.DataFrame:
-        """Returns properties of oxides in data."""
-        return pd.DataFrame(self._oxides_props, index=pd.Index(self._oxides))
-
-    @property
-    def _df(self) -> pd.DataFrame:
-        """Returns dataframe with only oxides in columns."""
-        return self._obj[self._oxides]
-
-    def _final(self, df, **kwargs):
-        select = kwargs.get("select", [])
-        if select:
-            df = df[df.columns.intersection(select)]
-            rest = df.columns.symmetric_difference(select).difference(df.columns)
-            df[rest] = np.nan
-        keep = kwargs.get("keep", [])
-        if keep == "all":
-            keep = self._others
-        return pd.concat([df, self._obj[keep]], axis=1)
-
-    def df(self, **kwargs) -> pd.DataFrame:
-        """Returns dataframe.
-
-        Keyword Args:
-            select (list): list of oxides to be included. Default all oxides.
-            keep (list): list of additional columns to be included. Default [].
-
-        Returns:
-            Dataframe with oxides and additional columns
-        """
-        return self._final(self._df, **kwargs)
 
     def mean(self, **kwargs) -> pd.DataFrame:
         """Return Dataframe with single row of arithmetic means of oxide columns"""
@@ -369,7 +377,6 @@ class OxidesAccessor:
 
         Keyword Args:
             to (float): Sum of oxides. Default 100.0
-            select (list): list of oxides to be included. Default all oxides.
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
@@ -383,7 +390,6 @@ class OxidesAccessor:
         """Convert oxides weight percents to molar proportions.
 
         Keyword Args:
-            select (list): list of oxides to be included. Default all oxides.
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
@@ -397,7 +403,6 @@ class OxidesAccessor:
         """Calculate cations number.
 
         Keyword Args:
-            select (list): list of oxides to be included. Default all oxides.
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
@@ -411,7 +416,6 @@ class OxidesAccessor:
         """Calculate oxugens number.
 
         Keyword Args:
-            select (list): list of oxides to be included. Default all oxides.
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
@@ -449,9 +453,9 @@ class OxidesAccessor:
         """Cations calculated on the basis of oxygens or cations.
 
         Keyword Args:
-            noxy (int, optional): ideal number of oxygens. Default 1
-            ncat (int, optional): ideal number of cations. Default 1
-            tocat (bool, optional): when ``True`` normalized to ``ncat``,
+            noxy (int): ideal number of oxygens. Default 1
+            ncat (int): ideal number of cations. Default 1
+            tocat (bool): when ``True`` normalized to ``ncat``,
                 otherwise to ``noxy``. Default ``False``
 
         Returns:
@@ -477,7 +481,6 @@ class OxidesAccessor:
             ncat (int): number of cations
 
         Keyword Args:
-            select (list): list of oxides to be included. Default all oxides.
             keep (list): list of additional columns to be included.Default [].
 
         Returns:
@@ -496,14 +499,13 @@ class OxidesAccessor:
                 CaO mol% = CaO mol% - (10 / 3) * P2O5 mol%
 
         Keyword Args:
-            select (list): list of oxides to be included. Default all oxides.
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Apatite corrected dataframe
 
         """
-        if ("P2O5" in self._oxides) and ("CaO" in self._oxides):
+        if ("P2O5" in self._names) and ("CaO" in self._names):
             df = self._df.div(self.props["mass"])
             df = df.div(df.sum(axis=1), axis=0)
             df["CaO"] = (df["CaO"] - (10 / 3) * df["P2O5"]).clip(lower=0)
@@ -525,7 +527,6 @@ class OxidesAccessor:
 
         Keyword Args:
             to (str): to what iron oxide Fe should be converted. Default `"FeO"`
-            select (list): list of oxides to be included. Default all oxides.
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
@@ -534,10 +535,10 @@ class OxidesAccessor:
         """
         to = kwargs.get("to", "FeO")
         if to == "FeO":
-            if "Fe2O3" in self._oxides:
+            if "Fe2O3" in self._names:
                 Fe3to2 = 2 * formula("FeO").mass / formula("Fe2O3").mass
                 res = self._df.copy()
-                if "FeO" in self._oxides:
+                if "FeO" in self._names:
                     res["FeO"] += Fe3to2 * res["Fe2O3"]
                 else:
                     res["FeO"] = Fe3to2 * res["Fe2O3"]
@@ -546,10 +547,10 @@ class OxidesAccessor:
             else:
                 return self._final(self._df, **kwargs)
         elif to == "Fe2O3":
-            if "FeO" in self._oxides:
+            if "FeO" in self._names:
                 Fe2to3 = formula("Fe2O3").mass / formula("FeO").mass / 2
                 res = self._df.copy()
-                if "Fe2O3" in self._oxides:
+                if "Fe2O3" in self._names:
                     res["Fe2O3"] += Fe2to3 * res["FeO"]
                 else:
                     res["Fe2O3"] = Fe2to3 * res["FeO"]
@@ -573,7 +574,6 @@ class OxidesAccessor:
             ncat (int): ideal number of cations. Default 1
 
         Keyword Args:
-            select (list): list of oxides to be included. Default all oxides.
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
@@ -581,7 +581,7 @@ class OxidesAccessor:
 
         """
         charge = self.cat_number().mul(self.cnf(ncat), axis=0)
-        if ("Fe2O3" in self._oxides) & ("FeO" not in self._oxides):
+        if ("Fe2O3" in self._names) & ("FeO" not in self._names):
             charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
             chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             toconv = chargedef
@@ -591,7 +591,7 @@ class OxidesAccessor:
             ncats["FeO"] = 1
             mws = self.props["mass"]
             mws["FeO"] = formula("FeO").mass
-        elif "Fe2O3" in self._oxides:
+        elif "Fe2O3" in self._names:
             charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
             chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             toconv = chargedef.clip(lower=0, upper=charge["FeO"])
@@ -599,7 +599,7 @@ class OxidesAccessor:
             charge["FeO"] = charge["FeO"] - toconv
             ncats = self.props["ncat"]
             mws = self.props["mass"]
-        elif "FeO" in self._oxides:
+        elif "FeO" in self._names:
             chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             charge["Fe2O3"] = chargedef.clip(lower=0, upper=charge["FeO"])
             charge["FeO"] = charge["FeO"] - charge["Fe2O3"]
@@ -623,8 +623,7 @@ class OxidesAccessor:
             mineral: Mineral instance (see `petropandas.minerals`)
 
         Keyword Args:
-            force (bool, optional): when True, remaining cations are added to last site
-            select (list): list of oxides to be included. Default all oxides.
+            force (bool): when True, remaining cations are added to last site
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
@@ -647,21 +646,24 @@ class OxidesAccessor:
         else:
             raise NoEndMembers(mineral)
 
-    def TCbulk(self, H2O=-1, oxygen=0.01, system="MnNCKFMASHTO") -> None:
+    def TCbulk(self, **kwargs) -> None:
         """Print oxides formatted as THERMOCALC bulk script
 
         Note:
             The CaO is recalculate using apatite correction based on P205 if available.
 
-        Args:
-            H2O (float, optional): wt% of water. When -1 the amount is calculated
+        Keyword Args:
+            H2O (float): wt% of water. When -1 the amount is calculated
                 as 100 - Total. Default -1.
-            oxygen (float, optional): value to calculate moles of ferric iron.
+            oxygen (float): value to calculate moles of ferric iron.
                 Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
-            system (str, optional): axfile to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
+            system (str): axfile to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
                 'KFMASH', 'NCKFMASHTOCr', 'NCKFMASTOCr'. Default 'MnNCKFMASHTO'
 
         """
+        H2O = kwargs.get("H2O", -1)
+        oxygen = kwargs.get("oxygen", 0.01)
+        system = kwargs.get("system", "MnNCKFMASHTO")
         # fmt: off
         bulk = {
             "MnNCKFMASHTO": ["H2O", "SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "MnO", "O"],
@@ -695,21 +697,24 @@ class OxidesAccessor:
         for ix, row in df[bulk[system]].iterrows():
             print("bulk" + "".join([f" {v:6.3f}" for v in row.values]) + f"  % {ix}")
 
-    def Perplexbulk(self, H2O=-1, oxygen=0.01, system="MnNCKFMASHTO") -> None:
+    def Perplexbulk(self, **kwargs) -> None:
         """Print oxides formatted as PerpleX thermodynamic component list
 
         Note:
             The CaO is recalculate using apatite correction based on P205 if available.
 
-        Args:
-            H2O (float, optional): wt% of water. When -1 the amount is calculated
+        Keyword Args:
+            H2O (float): wt% of water. When -1 the amount is calculated
                 as 100 - Total. Default -1.
-            oxygen (float, optional): value to calculate moles of ferric iron.
+            oxygen (float): value to calculate moles of ferric iron.
                 Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
             system (str): system to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
                 'KFMASH', 'NCKFMASHTOCr', 'NCKFMASTOCr'. Default 'MnNCKFMASHTO'
 
         """
+        H2O = kwargs.get("H2O", -1)
+        oxygen = kwargs.get("oxygen", 0.01)
+        system = kwargs.get("system", "MnNCKFMASHTO")
         # fmt: off
         bulk = {
             "MnNCKFMASHTO": ["H2O", "SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "MnO", "O2"],
@@ -744,26 +749,30 @@ class OxidesAccessor:
             print(f"{ox:6s}1 {val:8.5f}      0.00000      0.00000     molar amount")
         print("end thermodynamic component list")
 
-    def MAGEMin(self, H2O=-1, oxygen=0.01, db="mp", sys_in="mol") -> None:
+    def MAGEMin(self, **kwargs) -> None:
         """Print oxides formatted as MAGEMin bulk file
 
         Note:
             The CaO is recalculate using apatite correction based on P205 if available.
 
-        Args:
-            H2O (float, optional): wt% of water. When -1 the amount is calculated
+        Keyword Args:
+            H2O (float): wt% of water. When -1 the amount is calculated
                 as 100 - Total. Default -1.
-            oxygen (float, optional): value to calculate moles of ferric iron.
+            oxygen (float): value to calculate moles of ferric iron.
                 Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
-            db (str, optional): MAGEMin database. 'mp' metapelite (White et al. 2014), 'mb' metabasite
+            db (str): MAGEMin database. 'mp' metapelite (White et al. 2014), 'mb' metabasite
                 (Green et al. 2016), 'ig' igneous (Holland et al. 2018), 'um' ultramafic
                 (Evans & Frost 2021), 'ume' ultramafic extended (Evans & Frost 2021 + pl, hb and aug
                 from Green et al. 2016), 'mpe' Metapelite extended (White et al. 2014,
                 Green et al. 2016, Evans & Frost 2021), 'mtl' mantle (Holland et al. 2013).
                 Default is "mp"
-            sys_in (str, optional): system comp "wt" or "mol". Default is "mol"
+            sys_in (str): system comp "wt" or "mol". Default is "mol"
 
         """
+        H2O = kwargs.get("H2O", -1)
+        oxygen = kwargs.get("oxygen", 0.01)
+        db = kwargs.get("db", "mp")
+        sys_in = kwargs.get("sys_in", "mol")
         # fmt: off
         bulk = {
             "ig": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3", "H2O"],
@@ -808,27 +817,20 @@ class OxidesAccessor:
 
 
 @pd.api.extensions.register_dataframe_accessor("ions")
-class IonsAccessor:
+class IonsAccessor(AccessorTemplate):
     """Use `.ions` pandas dataframe accessor."""
-
-    def __init__(self, pandas_obj):
-        self._validate(pandas_obj)
-        self._obj = pandas_obj
 
     def _validate(self, obj):
         # verify there is a ions column
         valid = []
-        self._ions = []
-        self._ions_props = []
-        self._others = []
         for col in obj.columns:
             try:
                 f = formula(col)
                 if (len(f.atoms) == 1) and (is_numeric_dtype(obj[col].dtype)):
                     if ision(next(iter(f.atoms.keys()))):
                         valid.append(True)
-                        self._ions.append(col)
-                        self._ions_props.append(elementprops(f))
+                        self._names.append(col)
+                        self._names_props.append(elementprops(f))
                     else:
                         valid.append(False)
                         self._others.append(col)
@@ -841,62 +843,22 @@ class IonsAccessor:
         if not any(valid):
             raise MissingColumns("ions")
 
-    @property
-    def props(self) -> pd.DataFrame:
-        """Returns properties of ions in data."""
-        return pd.DataFrame(self._ions_props, index=pd.Index(self._ions))
-
-    @property
-    def _df(self) -> pd.DataFrame:
-        """Returns dataframe with only ions in columns."""
-        return self._obj[self._ions]
-
-    def _final(self, df, **kwargs):
-        select = kwargs.get("select", [])
-        if select:
-            df = df[df.columns.intersection(select)]
-            rest = df.columns.symmetric_difference(select).difference(df.columns)
-            df[rest] = np.nan
-        keep = kwargs.get("keep", [])
-        if keep == "all":
-            keep = self._others
-        return pd.concat([df, self._obj[keep]], axis=1)
-
-    def df(self, **kwargs) -> pd.DataFrame:
-        """Returns dataframe.
-
-        Keyword Args:
-            select (list): list of ions to be included. Default all ions.
-            keep (list): list of additional columns to be included. Default [].
-
-        Returns:
-            Dataframe with ions and additional columns
-        """
-        return self._final(self._df, **kwargs)
-
 
 @pd.api.extensions.register_dataframe_accessor("elements")
-class ElementsAccessor:
+class ElementsAccessor(AccessorTemplate):
     """Use `.elements` pandas dataframe accessor."""
-
-    def __init__(self, pandas_obj):
-        self._validate(pandas_obj)
-        self._obj = pandas_obj
 
     def _validate(self, obj):
         # verify there is an element column
         valid = []
-        self._elements = []
-        self._elements_props = []
-        self._others = []
         for col in obj.columns:
             try:
                 f = formula(col)
                 if (len(f.atoms) == 1) and (is_numeric_dtype(obj[col].dtype)):
                     if iselement(next(iter(f.atoms.keys()))):
                         valid.append(True)
-                        self._elements.append(col)
-                        self._elements_props.append(elementprops(f))
+                        self._names.append(col)
+                        self._names_props.append(elementprops(f))
                     else:
                         valid.append(False)
                         self._others.append(col)
@@ -909,97 +871,24 @@ class ElementsAccessor:
         if not any(valid):
             raise MissingColumns("elements")
 
-    @property
-    def props(self) -> pd.DataFrame:
-        """Returns properties of elements in data."""
-        return pd.DataFrame(self._elements_props, index=pd.Index(self._elements))
-
-    @property
-    def _df(self):
-        """Returns dataframe with only elements in columns."""
-        return self._obj[self._elements]
-
-    def _final(self, df, **kwargs):
-        select = kwargs.get("select", [])
-        if select:
-            df = df[df.columns.intersection(select)]
-            rest = df.columns.symmetric_difference(select).difference(df.columns)
-            df[rest] = np.nan
-        keep = kwargs.get("keep", [])
-        if keep == "all":
-            keep = self._others
-        return pd.concat([df, self._obj[keep]], axis=1)
-
-    def df(self, **kwargs) -> pd.DataFrame:
-        """Returns dataframe.
-
-        Keyword Args:
-            select (list): list of elements to be included. Default all elements.
-            keep (list): list of additional columns to be included. Default [].
-
-        Returns:
-            Dataframe with elements and additional columns
-        """
-        return self._final(self._df, **kwargs)
-
 
 @pd.api.extensions.register_dataframe_accessor("ree")
-class REEAccessor:
+class REEAccessor(AccessorTemplate):
     """Use `.ree` pandas dataframe accessor."""
-
-    def __init__(self, pandas_obj):
-        self._validate(pandas_obj)
-        self._obj = pandas_obj
 
     def _validate(self, obj):
         # verify there is a REE column
         valid = []
-        self._ree = []
-        self._ree_props = []
-        self._others = []
         for col in obj.columns:
             if col in REE:
                 valid.append(True)
-                self._ree.append(col)
-                self._ree_props.append(elementprops(formula(col)))
+                self._names.append(col)
+                self._names_props.append(elementprops(formula(col)))
             else:
                 valid.append(False)
                 self._others.append(col)
         if not any(valid):
             raise MissingColumns("REE")
-
-    @property
-    def props(self) -> pd.DataFrame:
-        """Returns properties of REE in data."""
-        return pd.DataFrame(self._ree_props, index=pd.Index(self._ree))
-
-    @property
-    def _df(self):
-        """Returns dataframe with only REE in columns."""
-        return self._obj[self._ree]
-
-    def _final(self, df, **kwargs):
-        select = kwargs.get("select", [])
-        if select:
-            df = df[df.columns.intersection(select)]
-            rest = df.columns.symmetric_difference(select).difference(df.columns)
-            df[rest] = np.nan
-        keep = kwargs.get("keep", [])
-        if keep == "all":
-            keep = self._others
-        return pd.concat([df, self._obj[keep]], axis=1)
-
-    def df(self, **kwargs) -> pd.DataFrame:
-        """Returns dataframe.
-
-        Keyword Args:
-            select (list): list of elements to be included. Default all elements.
-            keep (list): list of additional columns to be included. Default [].
-
-        Returns:
-            Dataframe with elements and additional columns
-        """
-        return self._final(self._df, **kwargs)
 
     def normalize(self, **kwargs) -> pd.DataFrame:
         """Normalize REE by reservoir.
@@ -1013,7 +902,6 @@ class REEAccessor:
             reservoir (str): Name of reservoir. Deafult "CI Chondrites"
             reference (str): Reference. Default "McDonough & Sun 1995"
             source (str): Original source. Deafult same as reference.
-            select (list): list of elements to be included. Default all elements.
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
@@ -1024,7 +912,7 @@ class REEAccessor:
         source = kwargs.get("source", reference)
         nrm = pd.Series(config["reservoirs"][reservoir][reference][source])
         res = self._df / nrm
-        res = res[self._ree]
+        res = res[self._names]
         res["Eu/Eu*"] = res["Eu"] / np.sqrt(res["Sm"] * res["Gd"])
         res["Gd/Yb"] = res["Gd"] / res["Yb"]
         return self._final(res, **kwargs)
@@ -1046,15 +934,15 @@ class REEAccessor:
                 choosing the colors to use when mapping the hue semantic.
             legend ("auto", "brief", "full", or False): How to draw the legend.
             title (str): Title of the plot. Default None
-            select (list): list of elements to be included. Default all elements.
             filename (str): If not none, plot is saved to file. Default None.
             dpi (int): DPI used for `savefig`. Default 150.
             keep (list): list of additional columns to be included. Default [].
         """
         fig, ax = plt.subplots()
+        ndf = self.normalize(**kwargs)
         ax.set(yscale="log")
-        ree = self.df(**kwargs).melt(
-            id_vars=kwargs.get("keep", self._others),
+        ree = ndf.melt(
+            id_vars=kwargs.get("keep", []),
             var_name="ree",
             ignore_index=False,
         )
@@ -1105,32 +993,24 @@ class REEAccessor:
 
 
 @pd.api.extensions.register_dataframe_accessor("isoplot")
-class IsoplotAccessor:
+class IsoplotAccessor(AccessorTemplate):
     """Use `.isoplot` pandas dataframe accessor."""
 
     def __init__(self, pandas_obj):
-        self._validate(pandas_obj)
-        self._obj = pandas_obj
+        super().__init__(pandas_obj)
 
     def _validate(self, obj):
         # verify there is a isoplot column
         valid = []
-        self._isoplot = []
-        self._others = []
         for col in obj.columns:
             if col in ISOPLOT:
                 valid.append(True)
-                self._isoplot.append(col)
+                self._names.append(col)
             else:
                 valid.append(False)
                 self._others.append(col)
         if not any(valid):
             raise MissingColumns("isoplot")
-
-    @property
-    def _df(self):
-        """Returns dataframe with only IsoplotR variables in columns."""
-        return self._obj[self._isoplot]
 
     def clipboard(self, **kwargs):
         """Copy data to clipbord to be used in IsoplotR online.

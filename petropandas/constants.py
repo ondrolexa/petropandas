@@ -1,7 +1,7 @@
 # fmt: off
 REE = ["La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Sc", "Y"]
 
-REE_PLOT = ["La", "Ce", "Pr", "Nd", "Sm", "Eu", "Gd",  "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu"]
+REE_PLOT = ["La", "Ce", "Pr", "Nd", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu"]
 
 ISOPLOT = [
     "07/35", "06/38", "38/06", "07/06", "04/38", "04/06", "04/07", "08/32", "32/38", "08/06", "35/07", "08/07",
@@ -20,11 +20,12 @@ AGECOLS = ["Age75", "Age75_Err", "Age68", "Age68_Err", "Age76", "Age76_Err", "Be
 COLNAMES = {
     "SB": {
         "238U/206Pb": "38/06",
-        "2s": "38/06_Err",
+        "238U/206Pb2s": "38/06_Err",
         "207Pb/206Pb": "07/06",
-        "2s.1": "07/06_Err",
+        "207Pb/206Pb2s": "07/06_Err",
+        "208Pb/232Th": "08/32",
+        "208Pb/232Th2s": "08/32_Err",
         "rho": "RhoXY",
-        "P31_CPS_mean": "P",
         "U238_ppm_mean": "U",
         "Th232_ppm_mean": "Th",
         "Si28_ppm_mean": "Si",
