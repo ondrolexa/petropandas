@@ -182,8 +182,7 @@ class PetroPlotsAccessor:
         use_index=False,
         xlabel=None,
         xticks_rotation=0,
-        marker="o",
-        ms=4,
+        markers=False,
     ):
         """Plot garnet profiles.
 
@@ -212,15 +211,11 @@ class PetroPlotsAccessor:
                 otherwise the plot is shown.
             maxticks (int, optional): maximum number of ticks on x-axis. Default 20
             xticks_rotation (int, optional): rotation of xticks labels. Default 0
-            marker (str, optional): marker. Default "o"
-            ms (float, optional): marker size. Default 4
+            markers (bool, optional): Show markers. Default False
 
         """
         em = self._obj.copy()
-        colors1 = list(mcolors.TABLEAU_COLORS.keys())[: len(cols)]
-        colors2 = list(mcolors.TABLEAU_COLORS.keys())[
-            len(cols) : len(cols) + len(cols_extra)
-        ]
+        colors = sns.color_palette(None, len(cols) + len(cols_extra))
         fig, ax1 = plt.subplots()
         if percents:
             multiple = 100
@@ -229,56 +224,65 @@ class PetroPlotsAccessor:
             multiple = 1
             unit = " [fraction]"
         if use_index:
-            xvals = em.index
             xlabel = "index" if xlabel is None else xlabel
         else:
-            xvals = range(len(em))
+            em.index = range(len(em))
             xlabel = "position" if xlabel is None else xlabel
         ax1.set_xlabel(xlabel)
         if twin:
             ax1.set_ylabel(" ".join(cols) + unit)
-            h1 = ax1.plot(xvals, multiple * em[cols], marker=marker, ms=ms)
-            for h, color in zip(h1, colors1):
-                h.set_color(color)
+            with sns.color_palette(colors[:1]):
+                lns1 = sns.lineplot(
+                    multiple * em[cols], ax=ax1, markers=markers, dashes=False
+                )
+            # h1 = ax1.plot(xvals, multiple * em[cols], marker=marker, ms=ms)
             if lim is not None:
                 ax1.set_ylim(lim[0], lim[1])
             else:
                 ax1.set_ymargin(margin)
             ax2 = ax1.twinx()
             ax2.set_ylabel(" ".join(cols_extra) + unit)
-            h2 = ax2.plot(xvals, multiple * em[cols_extra], marker=marker, ms=ms)
-            for h, color in zip(h2, colors2):
-                h.set_color(color)
+            with sns.color_palette(colors[1:]):
+                lns2 = sns.lineplot(
+                    multiple * em[cols_extra],
+                    ax=ax2,
+                    markers=markers,
+                    dashes=False,
+                )
+            # h2 = ax2.plot(xvals, multiple * em[cols_extra], marker=marker, ms=ms)
             if lim_extra is not None:
                 ax2.set_ylim(lim_extra[0], lim_extra[1])
             else:
                 ax2.set_ymargin(margin)
-            plt.legend(
-                h1 + h2,
-                cols + cols_extra,
-                bbox_to_anchor=(0.0, 1.02, 1.0, 0.102),
-                loc=3,
-                ncol=len(cols + cols_extra),
-                mode="expand",
-                borderaxespad=0.0,
+            # common legend
+            h1, l1 = lns1.get_legend_handles_labels()
+            h2, l2 = lns2.get_legend_handles_labels()
+            ax1.legend(
+                handles=h1 + h2,
+                labels=l1 + l2,
+                loc=8,
+                bbox_to_anchor=(0.5, 1),
+                ncol=4,
+                title=None,
+                frameon=False,
             )
+            ax2.get_legend().remove()
         else:
-            ax1.set_ylabel(unit)
-            h1 = ax1.plot(xvals, multiple * em[cols + cols_extra], marker=marker, ms=ms)
-            for h, color in zip(h1, colors1 + colors2):
-                h.set_color(color)
+            ax1.set_ylabel(unit[2:-1])
+            with sns.color_palette(colors):
+                lns1 = sns.lineplot(
+                    multiple * em[cols + cols_extra],
+                    ax=ax1,
+                    markers=markers,
+                    dashes=False,
+                )
+            # h1 = ax1.plot(xvals, multiple * em[cols + cols_extra], marker=marker, ms=ms)
             if lim is not None:
                 ax1.set_ylim(lim[0], lim[1])
             else:
                 ax1.set_ymargin(margin)
-            plt.legend(
-                h1,
-                cols + cols_extra,
-                bbox_to_anchor=(0.0, 1.02, 1.0, 0.102),
-                loc=3,
-                ncol=len(cols + cols_extra),
-                mode="expand",
-                borderaxespad=0.0,
+            sns.move_legend(
+                ax1, loc=8, bbox_to_anchor=(0.5, 1), ncol=4, title=None, frameon=False
             )
         # Find at most maxticks ticks on the x-axis at 'nice' locations
         xloc = MaxNLocator(maxticks - 1, integer=True)
