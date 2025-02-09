@@ -1,6 +1,9 @@
 ::: petropandas.minerals
     handler: python
     options:
+        group_by_category: true
+        show_root_heading: true
+        show_source: false
         members:
          - Mineral
          - Feldspar
@@ -10,5 +13,3 @@
          - Pyroxene_Fe2
          - StrucForm
          - Site
-        show_root_heading: false
-        show_source: false

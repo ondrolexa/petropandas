@@ -9,17 +9,16 @@ copyright: Maintained by Ondrej Lexa.
 nav:
   - Home: index.md
   - Tutorial: notebooks/tutorial.ipynb
-  - PetroAccessor: petro.md
-  - OxidesAccessor: oxides.md
-  - PetroPlotsAccessor: plots.md
-  - IonsAccessor: ions.md
-  - ElementsAccessor: elements.md
-  - REEAccessor: ree.md
-  - IsoplotAccessor: isoplot.md
+  - Utilities: utils.md
+  - Accessor: accessors.md
+  - Plotting: plots.md
   - Minerals: minerals.md
+
 plugins:
   - search
-  - mkdocs-jupyter
+  - mkdocs-jupyter:
+      execute: true
+      allow_errors: false
   - mkdocstrings:
       handlers:
         python:
@@ -29,36 +28,39 @@ plugins:
             inherited_members: true
             members_order: source
             group_by_category: true
+
 theme:
   name: material
-  feature:
-    tabs: true
+  features:
+    - search.suggest
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.prune
+    - toc.integrate
+  font:
+    text: Noto Sans Adlam Unjoined
+    code: Roboto Mono
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: white
       accent: deep orange
       toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
+        icon: material/weather-sunny
+        name: Dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: black
       accent: deep orange
       toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+        icon: material/weather-night
+        name: Light mode
   icon:
+    logo: fontawesome/solid/table
     repo: fontawesome/brands/github
 
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/ondrolexa/petropandas
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/petropandas
-
 markdown_extensions:
+  - admonition
   - toc:
       permalink: true
   - pymdownx.arithmatex:
