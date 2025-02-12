@@ -163,6 +163,23 @@ class PetroAccessor:
         self._obj[expr] = self._obj.eval(expr)
         return self._obj
 
+    def to_latex(self, total=False, transpose=True, precision=2) -> str:
+        """Convert datatable to LaTeX string
+
+        Args:
+            total (bool, optional): Add column `"Total"` with total sums.
+                Default `True`
+            transpose (bool, optional): Place samples as columns. Default ``True``
+            precision (bool, optional): Nimber of decimal places. Default 2
+
+        """
+        df = self._obj.copy()
+        if total:
+            df["Total"] = df.sum(axis=1, numeric_only=True)
+        if transpose:
+            df = df.T
+        return df.fillna("").style.format(precision=precision).to_latex()
+
 
 @pd.api.extensions.register_dataframe_accessor("petroplots")
 class PetroPlotsAccessor:
@@ -324,9 +341,13 @@ class AccessorTemplate:
         #     rest = df.columns.symmetric_difference(select).difference(df.columns)
         #     df[rest] = np.nan
         keep = kwargs.get("keep", [])
-        if keep == "all":
-            keep = self._others
-        return pd.concat([df, self._obj[keep]], axis=1)
+        match keep:
+            case []:
+                return df
+            case "all":
+                return pd.concat([df, self._obj[self._others]], axis=1)
+            case _:
+                return pd.concat([df, self._obj[keep]], axis=1)
 
     @property
     def props(self) -> pd.DataFrame:
@@ -514,7 +535,6 @@ class OxidesAccessor(AccessorTemplate):
             df = df.div(df.sum(axis=1), axis=0).mul(self._df.sum(axis=1), axis=0)
             return self._final(df, **kwargs)
         else:
-            print("Both CaO and P2O5 not in data. Nothing changed.")
             return self._final(self._df, **kwargs)
 
     def convert_Fe(self, **kwargs) -> pd.DataFrame:
@@ -615,6 +635,66 @@ class OxidesAccessor(AccessorTemplate):
         df = ncharge.mul(mws).mul(self.cat_number().sum(axis=1), axis="rows").div(ncats)
         res[df.columns] = df
         return self._final(res, **kwargs)
+
+    def apfu(self, mineral: Mineral, **kwargs) -> pd.DataFrame:
+        """Calculate a.p.f.u for given mineral
+
+        Args:
+            mineral: Mineral instance (see `petropandas.minerals`)
+
+        Keyword Args:
+            force (bool): when True, remaining cations are added to last site
+            keep (list): list of additional columns to be included. Default [].
+
+        Returns:
+            Dataframe with calculated endmembers
+
+        """
+        force = kwargs.get("force", False)
+        if mineral.has_endmembers:
+            if mineral.needsFe == "Fe2":
+                dt = self.convert_Fe()
+            elif mineral.needsFe == "Fe3":
+                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat)
+            else:
+                dt = self.df()
+            cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
+            res = []
+            for _, row in cations.iterrows():
+                res.append(mineral.apfu(row, force=force))
+            return self._final(pd.DataFrame(res, index=self._obj.index), **kwargs)
+        else:
+            raise NoEndMembers(mineral)
+
+    def check_stechiometry(self, mineral: Mineral, **kwargs) -> pd.Series:
+        """Calculate average missfit of populated and ideal cations on sites for given mineral
+
+        Args:
+            mineral: Mineral instance (see `petropandas.minerals`)
+
+        Keyword Args:
+            force (bool): when True, remaining cations are added to last site
+            keep (list): list of additional columns to be included. Default [].
+
+        Returns:
+            Dataframe with calculated endmembers
+
+        """
+        force = kwargs.get("force", False)
+        if mineral.has_endmembers:
+            if mineral.needsFe == "Fe2":
+                dt = self.convert_Fe()
+            elif mineral.needsFe == "Fe3":
+                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat)
+            else:
+                dt = self.df()
+            cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
+            res = []
+            for _, row in cations.iterrows():
+                res.append(mineral.check_stechiometry(row, force=force))
+            return pd.Series(res, index=self._obj.index, name="misfit")
+        else:
+            raise NoEndMembers(mineral)
 
     def endmembers(self, mineral: Mineral, **kwargs) -> pd.DataFrame:
         """Calculate endmembers proportions

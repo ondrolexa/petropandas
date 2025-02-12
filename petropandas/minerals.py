@@ -104,16 +104,16 @@ class StrucForm:
         else:
             return "Not yet calculated"
 
-    def get(self, atom):
+    def get(self, atom) -> np.floating:
         """Get total number of given atom in structure
 
         Args:
             atom (str): atom name
 
         """
-        return sum([s.get(atom) for s in self.sites])
+        return np.sum([s.get(atom) for s in self.sites])
 
-    def site(self, name):
+    def site(self, name) -> Site | None:
         """Get site by name
 
         Args:
@@ -144,7 +144,8 @@ class StrucForm:
         else:
             raise MineralNotCalculated()
 
-    def check_stechiometry(self):
+    @property
+    def check_stechiometry(self) -> np.floating:
         """Calculate average missfit of populated and ideal cations on sites"""
         if not self.reminder.empty:
             return np.mean([abs(s.free) / s.ncat for s in self.sites])
@@ -234,6 +235,18 @@ class Mineral:
         """
         sf = self.calculate(cations, force=force)
         return sf.apfu
+
+    def check_stechiometry(self, cations, force=False) -> np.floating:
+        """Calculate average missfit of populated and ideal cations on sites
+
+        Args:
+            cations (pandas.Series): cations p.f.u
+
+        Returns:
+            pandas.Series: average missfit
+        """
+        sf = self.calculate(cations, force=force)
+        return sf.check_stechiometry
 
 
 class Garnet_Fe2(Mineral):
