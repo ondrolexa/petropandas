@@ -160,7 +160,7 @@ class PetroAccessor:
         Returns:
             Dataframe with calculated column
         """
-        self._obj[expr] = self._obj.eval(expr)
+        self._obj[expr if name is None else name] = self._obj.eval(expr)
         return self._obj
 
     def to_latex(self, total=False, transpose=True, precision=2) -> str:
@@ -316,6 +316,106 @@ class PetroPlotsAccessor:
             plt.show()
 
 
+@pd.api.extensions.register_dataframe_accessor("isoplot")
+class IsoplotAccessor:
+    """Use `.isoplot` pandas dataframe accessor."""
+
+    def __init__(self, pandas_obj):
+        self._names = []
+        self._others = []
+        self._validate(pandas_obj)
+        self._obj = pandas_obj
+
+    def _validate(self, obj):
+        # verify there is a isoplot column
+        valid = []
+        for col in obj.columns:
+            if col in ISOPLOT:
+                valid.append(True)
+                self._names.append(col)
+            else:
+                valid.append(False)
+                self._others.append(col)
+        if not any(valid):
+            raise MissingColumns("isoplot")
+
+    def df(self, **kwargs) -> pd.DataFrame:
+        """Returns dataframe.
+
+        Keyword Args:
+            iso (int): IsoplotR format. Default `config["isoplot_default_format"]`
+            C (str): Column to be used as color. Default None
+            omit (str): Column to be used as omit. Default None
+            comment (str): Column to be used as comment. Default None
+
+        Returns:
+            Dataframe
+        """
+        iso = kwargs.get("iso", config["isoplot_default_format"])
+        df = self._obj[config["isoplot_formats"][iso]]
+        if "C" in kwargs:
+            df["C"] = self._obj[kwargs["C"]]
+        else:
+            df["C"] = None
+        if "omit" in kwargs:
+            df["omit"] = self._obj[kwargs["omit"]]
+        else:
+            df["omit"] = None
+        if "comment" in kwargs:
+            df["comment"] = self._obj[kwargs["comment"]]
+        else:
+            df["comment"] = None
+        return df
+
+    def clipboard(self, **kwargs):
+        """Copy data to clipbord to be used in IsoplotR online.
+
+        Note:
+            [IsoplotR online](http://isoplotr.es.ucl.ac.uk/home/index.html)
+
+                Vermeesch, P., 2018, IsoplotR: a free and open toolbox for geochronology.
+                Geoscience Frontiers, v.9, p.1479-1493, doi: 10.1016/j.gsf.2018.04.001.
+
+        Keyword Args:
+            iso (int): IsoplotR format. Default `config["isoplot_default_format"]`
+            C (str): Column to be used as color. Default None
+            omit (str): Column to be used as omit. Default None
+            comment (str): Column to be used as comment. Default None
+        """
+        df = self.df(**kwargs)
+        df.to_clipboard(header=False, index=False)
+
+    def calc_ages(self, **kwargs) -> pd.DataFrame | None:
+        """Copy data to clipbord, calc ages in IsoplotR online and paste back results.
+
+        Keyword Args:
+            iso (int): IsoplotR format. Default `config["isoplot_default_format"]`
+            C (str): Column to be used as color. Default None
+            omit (str): Column to be used as omit. Default None
+            comment (str): Column to be used as comment. Default None
+
+        Returns:
+            Dataframe with calculated ages
+        """
+        iso = kwargs.get("iso", config["isoplot_default_format"])
+        self.clipboard(**kwargs)
+        print(f"Data in format {iso} copied to clipboard")
+        print("Calc ages with Stacey-Kramers, discordance and digits 5")
+        input("Then copy to clipboard and press Enter to continue...")
+        ages = pd.read_clipboard(header=None)
+        if ages.shape[1] == 9:
+            ages.columns = config["agecols"]
+            ages.index = self._obj.index
+            for col in config["agecols"]:
+                self._obj[col] = ages[col]
+                self._validate(self._obj)
+            print("Ages added to data")
+        else:
+            print(
+                f"Wrong shape {ages.shape} of copied data. Awaits {self._obj.shape} Set correct options and try again."
+            )
+
+
 class AccessorTemplate:
     """Base class"""
 
@@ -351,7 +451,7 @@ class AccessorTemplate:
 
     @property
     def props(self) -> pd.DataFrame:
-        """Returns properties of oxides in data."""
+        """Returns properties."""
         return pd.DataFrame(self._names_props, index=pd.Index(self._names))
 
     def df(self, **kwargs) -> pd.DataFrame:
@@ -1070,88 +1170,6 @@ class REEAccessor(AccessorTemplate):
             plt.close(fig)
         else:
             plt.show()
-
-
-@pd.api.extensions.register_dataframe_accessor("isoplot")
-class IsoplotAccessor(AccessorTemplate):
-    """Use `.isoplot` pandas dataframe accessor."""
-
-    def __init__(self, pandas_obj):
-        super().__init__(pandas_obj)
-
-    def _validate(self, obj):
-        # verify there is a isoplot column
-        valid = []
-        for col in obj.columns:
-            if col in ISOPLOT:
-                valid.append(True)
-                self._names.append(col)
-            else:
-                valid.append(False)
-                self._others.append(col)
-        if not any(valid):
-            raise MissingColumns("isoplot")
-
-    def clipboard(self, **kwargs):
-        """Copy data to clipbord to be used in IsoplotR online.
-
-        Note:
-            [IsoplotR online](http://isoplotr.es.ucl.ac.uk/home/index.html)
-
-                Vermeesch, P., 2018, IsoplotR: a free and open toolbox for geochronology.
-                Geoscience Frontiers, v.9, p.1479-1493, doi: 10.1016/j.gsf.2018.04.001.
-
-        Keyword Args:
-            iso (int): IsoplotR format. Default `config["isoplot_default_format"]`
-            C (str): Column to be used as color. Default None
-            omit (str): Column to be used as omit. Default None
-            comment (str): Column to be used as comment. Default None
-        """
-        iso = kwargs.get("iso", config["isoplot_default_format"])
-        df = self._df[config["isoplot_formats"][iso]]
-        if "C" in kwargs:
-            df["C"] = self._obj[kwargs["C"]]
-        else:
-            df["C"] = None
-        if "omit" in kwargs:
-            df["omit"] = self._obj[kwargs["omit"]]
-        else:
-            df["omit"] = None
-        if "comment" in kwargs:
-            df["comment"] = self._obj[kwargs["comment"]]
-        else:
-            df["comment"] = None
-        df.to_clipboard(header=False, index=False)
-
-    def calc_ages(self, **kwargs) -> pd.DataFrame | None:
-        """Copy data to clipbord, calc ages in IsoplotR online and paste back results.
-
-        Keyword Args:
-            iso (int): IsoplotR format. Default `config["isoplot_default_format"]`
-            C (str): Column to be used as color. Default None
-            omit (str): Column to be used as omit. Default None
-            comment (str): Column to be used as comment. Default None
-
-        Returns:
-            Dataframe with calculated ages
-        """
-        iso = kwargs.get("iso", config["isoplot_default_format"])
-        self.clipboard(**kwargs)
-        print(f"Data in format {iso} copied to clipboard")
-        print("Calc ages with Stacey-Kramers, discordance and digits 5")
-        input("Then copy to clipboard and press Enter to continue...")
-        ages = pd.read_clipboard(header=None)
-        if ages.shape[1] == 9:
-            ages.columns = config["agecols"]
-            ages.index = self._obj.index
-            for col in config["agecols"]:
-                self._obj[col] = ages[col]
-                self._validate(self._obj)
-            print("Ages added to data")
-        else:
-            print(
-                f"Wrong shape {ages.shape} of copied data. Awaits {self._obj.shape} Set correct options and try again."
-            )
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -1,12 +1,8 @@
 import pandas as pd
 
 import petropandas.minerals as mindb
-import petropandas.pandas_accessors as pd_accessors
+from petropandas.pandas_accessors import config
 
-__all__ = (
-    "pd",
-    "pd_accessors",
-    "mindb",
-)
+__all__ = ("pd", "mindb", "config")
 
 __version__ = "0.1.1"
