@@ -219,19 +219,19 @@ class PetroPlotsAccessor:
             markers (bool): Show markers. Default False
 
         """
-        cols = kwargs.get("", ["Alm"])
-        cols_extra = kwargs.get("", ["Prp", "Sps", "Grs"])
-        twin = kwargs.get("", True)
-        margin = kwargs.get("", 0.1)
-        lim = kwargs.get("", None)
-        lim_extra = kwargs.get("", None)
-        filename = kwargs.get("", None)
-        maxticks = kwargs.get("", 20)
-        percents = kwargs.get("", False)
-        use_index = kwargs.get("", False)
-        xlabel = kwargs.get("", None)
-        xticks_rotation = kwargs.get("", 0)
-        markers = kwargs.get("", False)
+        cols = kwargs.get("cols", ["Alm"])
+        cols_extra = kwargs.get("cols_extra", ["Prp", "Sps", "Grs"])
+        twin = kwargs.get("twin", True)
+        margin = kwargs.get("margin", 0.1)
+        lim = kwargs.get("lim", None)
+        lim_extra = kwargs.get("lim_extra", None)
+        filename = kwargs.get("filename", None)
+        maxticks = kwargs.get("maxticks", 20)
+        percents = kwargs.get("percents", False)
+        use_index = kwargs.get("use_index", False)
+        xlabel = kwargs.get("xlabel", None)
+        xticks_rotation = kwargs.get("xticks_rotation", 0)
+        markers = kwargs.get("markers", None)
 
         em = self._obj.copy()
         colors = sns.color_palette(None, len(cols) + len(cols_extra))
@@ -248,11 +248,16 @@ class PetroPlotsAccessor:
             em.index = range(len(em))
             xlabel = "position" if xlabel is None else xlabel
         ax1.set_xlabel(xlabel)
+        if markers is None:
+            markers1 = markers2 = None
+        else:
+            markers1 = markers[: len(cols)]
+            markers2 = markers[len(cols) :]
         if twin:
             ax1.set_ylabel(" ".join(cols) + unit)
-            with sns.color_palette(colors[:1]):
+            with sns.color_palette(colors[: len(cols)]):
                 lns1 = sns.lineplot(
-                    multiple * em[cols], ax=ax1, markers=markers, dashes=False
+                    multiple * em[cols], ax=ax1, markers=markers1, dashes=False
                 )
             # h1 = ax1.plot(xvals, multiple * em[cols], marker=marker, ms=ms)
             if lim is not None:
@@ -261,11 +266,11 @@ class PetroPlotsAccessor:
                 ax1.set_ymargin(margin)
             ax2 = ax1.twinx()
             ax2.set_ylabel(" ".join(cols_extra) + unit)
-            with sns.color_palette(colors[1:]):
+            with sns.color_palette(colors[len(cols) :]):
                 lns2 = sns.lineplot(
                     multiple * em[cols_extra],
                     ax=ax2,
-                    markers=markers,
+                    markers=markers2,
                     dashes=False,
                 )
             # h2 = ax2.plot(xvals, multiple * em[cols_extra], marker=marker, ms=ms)
@@ -314,6 +319,84 @@ class PetroPlotsAccessor:
             plt.close(fig)
         else:
             plt.show()
+
+    def ternary(self, cola, colb, colc, **kwargs):
+        """Ternary scatter plot"""
+
+        def tx(a, b, c):
+            """Converts ternary to Cartesian x coordinates."""
+            return 0.5 * (a + 2 * b) / (a + b + c)
+
+        def ty(a, b, c):
+            """Converts ternary to Cartesian y coordinates."""
+            return (3**0.5 / 2) * a / (a + b + c)
+
+        if "marker" not in kwargs:
+            kwargs["marker"] = "o"
+
+        fig, ax = plt.subplots(constrained_layout=True)
+        ax.plot([0, 1], [0, 0], "-", color="black", linewidth=2, zorder=11)
+        ax.plot([0, 0.5], [0, 0.8660254], "-", color="black", linewidth=2, zorder=11)
+        ax.plot([0.5, 1], [0.8660254, 0], "-", color="black", linewidth=2, zorder=11)
+        # draw grid lines
+        for p in np.linspace(0, 1, 6)[1:-1]:
+            ax.plot(
+                [tx(1 - p, 0, p), tx(1 - p, p, 0)],
+                [ty(1 - p, 0, p), ty(1 - p, p, 0)],
+                "-",
+                color="grey",
+                linewidth=1,
+                zorder=1,
+            )
+            ax.plot(
+                [tx(0, p, 1 - p), tx(p, 0, 1 - p)],
+                [ty(0, p, 1 - p), ty(p, 0, 1 - p)],
+                "-",
+                color="grey",
+                linewidth=1,
+                zorder=1,
+            )
+            ax.plot(
+                [tx(0, 1 - p, p), tx(p, 1 - p, 0)],
+                [ty(0, 1 - p, p), ty(p, 1 - p, 0)],
+                "-",
+                color="grey",
+                linewidth=1,
+                zorder=1,
+            )
+        ax.text(
+            x=0.5,
+            y=0.91,
+            s=cola,
+            horizontalalignment="center",
+            verticalalignment="top",
+            zorder=11,
+        )
+        ax.text(
+            x=1.05,
+            y=-0.01,
+            s=colb,
+            horizontalalignment="center",
+            verticalalignment="top",
+            zorder=11,
+        )
+        ax.text(
+            x=-0.05,
+            y=-0.01,
+            s=colc,
+            horizontalalignment="center",
+            verticalalignment="top",
+            zorder=11,
+        )
+        # plot
+        ax.plot(
+            tx(self._obj[cola], self._obj[colb], self._obj[colc]),
+            ty(self._obj[cola], self._obj[colb], self._obj[colc]),
+            **kwargs,
+        )
+        ax.set_axis_off()  # remove the box, ticks, etc.
+        ax.axis("equal")  # ensure equal aspect ratio
+        plt.show()
 
 
 @pd.api.extensions.register_dataframe_accessor("isoplot")

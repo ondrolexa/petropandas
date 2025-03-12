@@ -6,3 +6,4 @@ pkg_dir = importlib.resources.files("petropandas")
 
 mnz = pd.read_csv(pkg_dir.joinpath("data", "mnz", "sbdata.csv")).petro.fix_columns("SB")
 bulk = pd.read_csv(pkg_dir.joinpath("data", "oxides", "bulk.csv"))
+minerals = pd.read_csv(pkg_dir.joinpath("data", "oxides", "minerals.csv"))
