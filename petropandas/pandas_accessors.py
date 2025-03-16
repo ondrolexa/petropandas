@@ -2,6 +2,7 @@ import importlib.resources
 import json
 
 import matplotlib.pyplot as plt
+import mpltern  # NOQA
 import numpy as np
 import pandas as pd
 import pyparsing
@@ -320,83 +321,84 @@ class PetroPlotsAccessor:
         else:
             plt.show()
 
-    def ternary(self, cola, colb, colc, **kwargs):
-        """Ternary scatter plot"""
+    def ternary(self, top, left, right, **kwargs):
+        """Ternary scatter plot
 
-        def tx(a, b, c):
-            """Converts ternary to Cartesian x coordinates."""
-            return 0.5 * (a + 2 * b) / (a + b + c)
+        Args:
+            top (str): Name of column for top variable
+            left (str): Name of column for left variable
+            right (str): Name of column for right variable
 
-        def ty(a, b, c):
-            """Converts ternary to Cartesian y coordinates."""
-            return (3**0.5 / 2) * a / (a + b + c)
+        Keyword Args:
+            kind (str): Kind of plot. One of `scatter`, `plot`
+                Deafult `scatter`
+            ternary_sum (float): Total sum. Default 1.0
+            ax (Axes): matplotlib axes to be used.
+            return_ax (bool): Whether to return matplotlib axes.
+                Default False
+            show (bool): Whether to show plot. Default True
 
-        if "marker" not in kwargs:
-            kwargs["marker"] = "o"
+        Additional keyword arguments are passed to underlying matplotlib
+        function, e.g. `s` or `c` to `scatter` or `label`
 
-        fig, ax = plt.subplots(constrained_layout=True)
-        ax.plot([0, 1], [0, 0], "-", color="black", linewidth=2, zorder=11)
-        ax.plot([0, 0.5], [0, 0.8660254], "-", color="black", linewidth=2, zorder=11)
-        ax.plot([0.5, 1], [0.8660254, 0], "-", color="black", linewidth=2, zorder=11)
-        # draw grid lines
-        for p in np.linspace(0, 1, 6)[1:-1]:
-            ax.plot(
-                [tx(1 - p, 0, p), tx(1 - p, p, 0)],
-                [ty(1 - p, 0, p), ty(1 - p, p, 0)],
-                "-",
-                color="grey",
-                linewidth=1,
-                zorder=1,
-            )
-            ax.plot(
-                [tx(0, p, 1 - p), tx(p, 0, 1 - p)],
-                [ty(0, p, 1 - p), ty(p, 0, 1 - p)],
-                "-",
-                color="grey",
-                linewidth=1,
-                zorder=1,
-            )
-            ax.plot(
-                [tx(0, 1 - p, p), tx(p, 1 - p, 0)],
-                [ty(0, 1 - p, p), ty(p, 1 - p, 0)],
-                "-",
-                color="grey",
-                linewidth=1,
-                zorder=1,
-            )
-        ax.text(
-            x=0.5,
-            y=0.91,
-            s=cola,
-            horizontalalignment="center",
-            verticalalignment="top",
-            zorder=11,
-        )
-        ax.text(
-            x=1.05,
-            y=-0.01,
-            s=colb,
-            horizontalalignment="center",
-            verticalalignment="top",
-            zorder=11,
-        )
-        ax.text(
-            x=-0.05,
-            y=-0.01,
-            s=colc,
-            horizontalalignment="center",
-            verticalalignment="top",
-            zorder=11,
-        )
-        # plot
-        ax.plot(
-            tx(self._obj[cola], self._obj[colb], self._obj[colc]),
-            ty(self._obj[cola], self._obj[colb], self._obj[colc]),
-            **kwargs,
-        )
-        ax.set_axis_off()  # remove the box, ticks, etc.
-        ax.axis("equal")  # ensure equal aspect ratio
-        plt.show()
+        """
+        kind = kwargs.pop("kind", "scatter")
+        ternary_sum = kwargs.pop("ternary_sum", 1.0)
+        return_ax = kwargs.pop("return_ax", False)
+        show = kwargs.pop("show", True)
+        if "ax" in kwargs:
+            ax = kwargs.pop("ax")
+        else:
+            fig = plt.figure()
+            ax = fig.add_subplot(projection="ternary", ternary_sum=ternary_sum)
+        ax.set_tlabel(top)
+        ax.set_llabel(left)
+        ax.set_rlabel(right)
+        top_vals = self._obj[top]
+        left_vals = self._obj[left]
+        right_vals = self._obj[right]
+        leg_color = False
+        leg_size = False
+        tit_color = None
+        tit_size = None
+        match kind:
+            case "scatter":
+                if "s" in kwargs:
+                    if isinstance(kwargs["s"], str):
+                        tit_size = kwargs["s"]
+                        kwargs["s"] = self._obj[kwargs["s"]]
+                if "c" in kwargs:
+                    if isinstance(kwargs["c"], str):
+                        tit_color = kwargs["c"]
+                        kwargs["c"] = self._obj[kwargs["c"]]
+                pc = ax.scatter(top_vals, left_vals, right_vals, **kwargs)
+                if "c" in kwargs:
+                    handles, labels = pc.legend_elements(prop="colors", num=6)
+                    if len(handles) > 1:
+                        leg_color = ax.legend(
+                            handles, labels, loc="upper right", title=tit_color
+                        )
+                if "s" in kwargs:
+                    handles, labels = pc.legend_elements(prop="sizes", num=6)
+                    if len(handles) > 1:
+                        leg_size = ax.legend(
+                            handles, labels, loc="upper left", title=tit_size
+                        )
+            case "plot":
+                pc = ax.plot(top_vals, left_vals, right_vals, **kwargs)
+
+        if return_ax:
+            return ax
+        if show:
+            handles, labels = ax.get_legend_handles_labels()
+            if handles:
+                ax.legend(handles, labels)
+            else:
+                if leg_color:
+                    ax.add_artist(leg_color)
+                if leg_size:
+                    ax.add_artist(leg_size)
+            plt.show()
 
 
 @pd.api.extensions.register_dataframe_accessor("isoplot")

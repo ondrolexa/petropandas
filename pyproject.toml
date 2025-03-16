@@ -20,6 +20,7 @@ dependencies = [
     "xlrd",
     "openpyxl",
     "periodictable",
+    "mpltern",
 ]
 
 [project.optional-dependencies]
