@@ -193,7 +193,7 @@ class PetroPlotsAccessor:
         """Plot garnet profiles.
 
         Note:
-            Endmembers have to be properly ordered.
+            DataFrame must contains garnet endmembers properly sorted.
 
         Keyword Args:
             use_index (bool): When True, xticks are derived from DataFrame
@@ -252,6 +252,8 @@ class PetroPlotsAccessor:
         if markers is None:
             markers1 = markers2 = None
         else:
+            if len(markers) == 1:
+                markers = (len(cols) + len(cols_extra)) * markers
             markers1 = markers[: len(cols)]
             markers2 = markers[len(cols) :]
         if twin:
