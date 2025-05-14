@@ -218,6 +218,7 @@ class PetroPlotsAccessor:
             maxticks (int): maximum number of ticks on x-axis. Default 20
             xticks_rotation (int): rotation of xticks labels. Default 0
             markers (bool): Show markers. Default False
+            subplot_kws (dict): kwargs passed to matplotlib subplots. Default {}
 
         """
         cols = kwargs.get("cols", ["Alm"])
@@ -236,7 +237,7 @@ class PetroPlotsAccessor:
 
         em = self._obj.copy()
         colors = sns.color_palette(None, len(cols) + len(cols_extra))
-        fig, ax1 = plt.subplots()
+        fig, ax1 = plt.subplots(**kwargs.get("subplot_kws", {}))
         if percents:
             multiple = 100
             unit = " [%]"
