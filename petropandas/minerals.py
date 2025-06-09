@@ -395,3 +395,37 @@ class Pyroxene(Mineral):
         em = A @ np.linalg.inv(M)
         em = em / em.sum()
         return pd.Series(em, index=["En", "Wo", "Fs", "Jd", "Aeg", "Kos"])
+
+
+class DiMica(Mineral):
+    """DiOct Micas"""
+
+    def __init__(self):
+        super().__init__()
+        self.noxy = 11
+        self.needsFe = "Fe2"
+        self.structure = (
+            ("T", 4, ["Si{4+}", "Al{3+}"]),
+            ("M", 2, ["Al{3+}", "Ti{4+}", "Cr{3+}", "Fe{2+}", "Mn{2+}", "Mg{2+}"]),
+            ("I", 1, ["Ba{2+}", "Ca{2+}", "Na{+}", "K{+}"]),
+        )
+
+    def endmembers(self, cations, force=False):
+        sf = self.calculate(cations, force=force)
+        apfu = self.apfu(cations, force=force)
+        Xm = sf.site("M").get("Al{3+}") - 1
+        XCel = 1 - Xm  # total amout (Fe Al-Celadonite + Mg Al-Celadonite)
+        XMg = apfu["Mg{2+}"] / (apfu["Mg{2+}"] + apfu["Fe{2+}"])
+        Isum = apfu["Ca{2+}"] + apfu["Na{+}"] + apfu["K{+}"]
+        XMPM = (
+            Isum * Xm
+        )  # Sum of Ca + Na + K multiplied by the total fraction of Ms, Pg, Mrg, and Prl
+        em = {
+            "Al-Celadonite": XMg * XCel,
+            "Fe Al-Celadonite": XCel - XMg * XCel,
+            "Pyrophyllite": Xm - XMPM,
+            "Margarite": XMPM * apfu["Ca{2+}"] / Isum,
+            "Paragonite": XMPM * apfu["Na{+}"] / Isum,
+            "Muscovite": XMPM * apfu["K{+}"] / Isum,
+        }
+        return pd.Series(em)

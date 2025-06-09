@@ -622,7 +622,7 @@ class OxidesAccessor(AccessorTemplate):
         return self._final(res, **kwargs)
 
     def oxy_number(self, **kwargs) -> pd.DataFrame:
-        """Calculate oxugens number.
+        """Calculate oxygens number.
 
         Keyword Args:
             keep (list): list of additional columns to be included. Default [].
