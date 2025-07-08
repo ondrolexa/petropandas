@@ -198,7 +198,6 @@ class PetroPlotsAccessor:
         Keyword Args:
             use_index (bool): When True, xticks are derived from DataFrame
                 index, otherwise ticks are sequential. Default False
-            xticks_rotation (float): Rotation of xtick labels. Default 0
             twin (bool): When ``True``, the plot has two independent y-axes
                 for better scaling. Endmembers must be separated into two groups using
                 `cols` and `cols_extra` args. When ``False`` both groups are plotted on
@@ -217,8 +216,13 @@ class PetroPlotsAccessor:
                 otherwise the plot is shown.
             maxticks (int): maximum number of ticks on x-axis. Default 20
             xticks_rotation (int): rotation of xticks labels. Default 0
-            markers (bool): Show markers. Default False
+            markers (list): Markers used. Default None
             subplot_kws (dict): kwargs passed to matplotlib subplots. Default {}
+            grid (bool): Show grid. Default False
+            grid_kws (dict): kwargs passed to matplotlib grid.
+                Default dict(visible=True)
+            grid_ticks (int): number of ticks on twin axes, when grid is True.
+                Default 10
 
         """
         cols = kwargs.get("cols", ["Alm"])
@@ -316,6 +320,17 @@ class PetroPlotsAccessor:
         xloc = MaxNLocator(maxticks - 1, integer=True)
         ax1.xaxis.set_major_locator(xloc)
         ax1.tick_params(axis="x", labelrotation=xticks_rotation)
+        # grid
+        if kwargs.get("grid", False):
+            if twin:
+                nticks = kwargs.get("grid_ticks", 10)
+                ax1.set_yticks(
+                    np.linspace(ax1.get_ybound()[0], ax1.get_ybound()[1], nticks)
+                )
+                ax2.set_yticks(
+                    np.linspace(ax2.get_ybound()[0], ax2.get_ybound()[1], nticks)
+                )
+            ax1.grid(kwargs.get("grid_kws", dict(visible=True)))
         fig.tight_layout()
         if filename is not None:
             fig.savefig(filename)
