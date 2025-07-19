@@ -25,7 +25,7 @@ def formula2wt(s):
         if atom.symbol in oxides:
             ox = formula(oxides[atom.symbol])
             s[str(ox)] = n * ox.mass / ox.atoms[atom]
-    return pd.DataFrame(100 * s / s.sum()).T
+    return s.to_frame().T
 
 
 class MineralNotCalculated(Exception):

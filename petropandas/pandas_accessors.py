@@ -579,6 +579,35 @@ class AccessorTemplate:
         """
         return self._final(self._df, **kwargs)
 
+    def dropna(self, **kwargs) -> pd.DataFrame:
+        """Drop columns with all NA values.
+
+        Keyword Args:
+            keep (list): list of additional columns to be included. Default [].
+
+        Returns:
+            Dataframe without NA columns
+        """
+        return self._final(self._df.dropna(axis=1, how="all"), **kwargs)
+
+    def mean(self) -> pd.DataFrame:
+        """Return Dataframe with single row of arithmetic means of valid columns"""
+        return self._df.mean(axis=0).to_frame().T
+
+    def scale(self, **kwargs) -> pd.DataFrame:
+        """Normalize values to given sum.
+
+        Keyword Args:
+            to (float): Sum of values. Default 100.0
+            keep (list): list of additional columns to be included. Default [].
+
+        Returns:
+            Scaled dataframe
+        """
+        to = kwargs.get("to", 100.0)
+        res = to * self._df.div(self._df.sum(axis=1), axis=0)
+        return self._final(res, **kwargs)
+
 
 @pd.api.extensions.register_dataframe_accessor("oxides")
 class OxidesAccessor(AccessorTemplate):
@@ -602,24 +631,6 @@ class OxidesAccessor(AccessorTemplate):
                 self._others.append(col)
         if not any(valid):
             raise MissingColumns("oxides")
-
-    def mean(self, **kwargs) -> pd.DataFrame:
-        """Return Dataframe with single row of arithmetic means of oxide columns"""
-        return pd.DataFrame(self._df.mean(axis=0)).T
-
-    def scale(self, **kwargs) -> pd.DataFrame:
-        """Normalize oxide values to given sum.
-
-        Keyword Args:
-            to (float): Sum of oxides. Default 100.0
-            keep (list): list of additional columns to be included. Default [].
-
-        Returns:
-            Scaled dataframe
-        """
-        to = kwargs.get("to", 100.0)
-        res = to * self._df.div(self._df.sum(axis=1), axis=0)
-        return self._final(res, **kwargs)
 
     def molprop(self, **kwargs) -> pd.DataFrame:
         """Convert oxides weight percents to molar proportions.
