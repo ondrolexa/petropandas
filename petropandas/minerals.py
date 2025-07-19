@@ -1,5 +1,29 @@
 import numpy as np
 import pandas as pd
+from periodictable.formulas import formula
+
+oxides = {
+    "Al": "Al2O3",
+    "Si": "SiO2",
+    "Na": "Na2O",
+    "K": "K2O",
+    "Ca": "CaO",
+    "Mg": "MgO",
+    "Mn": "MnO",
+    "Fe": "FeO",
+    "Ti": "TiO2",
+    "P": "P2O5",
+}
+
+
+def formula2wt(s):
+    f = formula(s)
+    s = pd.Series()
+    for atom, n in f.atoms.items():
+        if atom.symbol in oxides:
+            ox = formula(oxides[atom.symbol])
+            s[str(ox)] = n * ox.mass / ox.atoms[atom]
+    return pd.DataFrame(100 * s / s.sum()).T
 
 
 class MineralNotCalculated(Exception):
