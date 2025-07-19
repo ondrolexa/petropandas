@@ -13,6 +13,8 @@ oxides = {
     "Fe": "FeO",
     "Ti": "TiO2",
     "P": "P2O5",
+    "Cr": "Cr2O3",
+    "Y": "Y2O3",
 }
 
 

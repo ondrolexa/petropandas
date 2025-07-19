@@ -35,6 +35,17 @@ germ = importlib.resources.files("petropandas").joinpath("data", "germ.json")
 with germ.open() as fp:
     config["reservoirs"] = json.load(fp)
 
+ionox = {
+    1: ("2", ""),
+    2: ("", ""),
+    3: ("2", "3"),
+    4: ("", "2"),
+    5: ("2", "5"),
+    6: ("", "3"),
+    7: ("2", "7"),
+    8: ("", "4"),
+}
+
 
 def oxideprops(f):
     ncat, element = f.structure[0]
@@ -1125,6 +1136,21 @@ class IonsAccessor(AccessorTemplate):
                 self._others.append(col)
         if not any(valid):
             raise MissingColumns("ions")
+
+    def wt(self):
+        """Oxides weight pervents calculated from ions.
+
+        Returns:
+            Dataframe with calculated oxides weight percents
+
+        """
+        df = pd.DataFrame()
+        for col, prop in zip(self._names, self._names_props):
+            ion = next(iter(formula(col).atoms.keys()))
+            m, n = ionox[ion.charge]
+            ox = formula(f"{ion.element.symbol}{m}O{n}")
+            df[str(ox)] = self._obj[col] * ox.mass / ox.structure[0][0]
+        return 100 * df.div(df.sum(axis=1), axis=0)
 
 
 @pd.api.extensions.register_dataframe_accessor("elements")
