@@ -827,7 +827,7 @@ class OxidesAccessor(AccessorTemplate):
         """
         charge = self.cat_number().mul(self.cnf(ncat), axis=0)
         if ("Fe2O3" in self._names) & ("FeO" not in self._names):
-            charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
+            charge.loc[pd.isna(self._df["Fe2O3"]), "Fe2O3"] = 0
             chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             toconv = chargedef
             charge["Fe2O3"] += toconv
@@ -837,7 +837,7 @@ class OxidesAccessor(AccessorTemplate):
             mws = self.props["mass"]
             mws["FeO"] = formula("FeO").mass
         elif "Fe2O3" in self._names:
-            charge["Fe2O3"].loc[pd.isna(self._df["Fe2O3"])] = 0
+            charge.loc[pd.isna(self._df["Fe2O3"]), "Fe2O3"] = 0
             chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             toconv = chargedef.clip(lower=0, upper=charge["FeO"])
             charge["Fe2O3"] += toconv
