@@ -594,6 +594,10 @@ class AccessorTemplate:
         """Return Dataframe with single row of arithmetic means of valid columns"""
         return self._df.mean(axis=0).to_frame().T
 
+    def sum(self) -> pd.DataFrame:
+        """Return Dataframe with single row of sum of valid columns"""
+        return self._df.sum(axis=0).to_frame().T
+
     def scale(self, **kwargs) -> pd.DataFrame:
         """Normalize values to given sum.
 
