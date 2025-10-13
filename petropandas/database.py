@@ -89,7 +89,8 @@ class PetroDB:
             if response.ok:
                 r = response.json()
                 res = pd.DataFrame(
-                    [row["values"] for row in r], index=[row["id"] for row in r]
+                    [row["values"] for row in r],
+                    index=pd.Index([row["id"] for row in r]),
                 )
                 res["label"] = [row["label"] for row in r]
                 res["mineral"] = [row["mineral"] for row in r]
@@ -112,8 +113,8 @@ class PetroDB:
         project: dict,
         sample: dict,
         df: pd.DataFrame,
-        label_col: str = None,
-        mineral_col: str = None,
+        label_col: str | None = None,
+        mineral_col: str | None = None,
     ):
         """Batch spot insert"""
 
@@ -143,7 +144,7 @@ class PetroDB:
         if response.ok:
             r = response.json()
             res = pd.DataFrame(
-                [row["values"] for row in r], index=[row["id"] for row in r]
+                [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
             )
             res["label"] = [row["label"] for row in r]
             res["weight"] = [row["weight"] for row in r]
@@ -166,8 +167,8 @@ class PetroDB:
         project: dict,
         sample: dict,
         df: pd.DataFrame,
-        label_col: str = None,
-        weight_col: str = None,
+        label_col: str | None = None,
+        weight_col: str | None = None,
     ):
         """Batch area insert"""
 
@@ -178,12 +179,14 @@ class PetroDB:
         if weight_col is None:
             weights = pd.Series(1, index=df.index)
         else:
-            weights = pd.to_numeric(df[weight_col])
+            weights = df[weight_col]
         areas = []
         for label, weight, (ix, row) in zip(
             labels, weights, df[df.oxides._names].iterrows()
         ):
-            areas.append({"label": label, "weight": weight, "values": row.to_dict()})
+            areas.append(
+                {"label": label, "weight": float(weight), "values": row.to_dict()}
+            )
         response = self.post(f"/areas/{project['id']}/{sample['id']}", areas)
         if response.ok:
             return response.json()
@@ -192,12 +195,21 @@ class PetroDB:
 
     # ---------- PROFILES
 
-    def profiles(self, project: dict, sample: dict):
-        response = self.get(f"/profiles/{project['id']}/{sample['id']}")
-        if response.ok:
-            return response.json()
+    def profiles(self, project: dict, sample: dict, label: str | None = None):
+        if label is not None:
+            response = self.get(
+                f"/search/profile/{project['id']}/{sample['id']}/{label}"
+            )
+            if response.ok:
+                return response.json()
+            else:
+                raise ValueError(response.json()["detail"])
         else:
-            raise ValueError(response.json()["detail"])
+            response = self.get(f"/profiles/{project['id']}/{sample['id']}")
+            if response.ok:
+                return response.json()
+            else:
+                raise ValueError(response.json()["detail"])
 
     def create_profile(self, project: dict, sample: dict, label: str, mineral: str):
         data = {"label": label, "mineral": mineral}
@@ -211,12 +223,12 @@ class PetroDB:
 
     def profilespots(self, project: dict, sample: dict, profile: dict):
         response = self.get(
-            f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}"
+            f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}"
         )
         if response.ok:
             r = response.json()
             res = pd.DataFrame(
-                [row["values"] for row in r], index=[row["id"] for row in r]
+                [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
             )
             res["index"] = [row["index"] for row in r]
             return res
@@ -235,14 +247,17 @@ class PetroDB:
         else:
             raise ValueError(response.json()["detail"])
 
-    def create_profilespots(self, project: dict, sample: dict, df: pd.DataFrame):
+    def create_profilespots(
+        self, project: dict, sample: dict, profile: dict, df: pd.DataFrame
+    ):
         """Batch profilespots insert"""
 
         profilespots = []
         for index, row in df[df.oxides._names].iterrows():
-            profilespots.append({"index": int(index), "values": row.to_dict()})
+            profilespots.append({"index": index, "values": row.to_dict()})
         response = self.post(
-            f"/profilespots/{project['id']}/{sample['id']}", profilespots
+            f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}",
+            profilespots,
         )
         if response.ok:
             return response.json()

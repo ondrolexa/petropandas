@@ -51,3 +51,10 @@ profile = "black"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "docs/notebooks"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff]
+line-length = 88
