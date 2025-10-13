@@ -21,6 +21,7 @@ dependencies = [
     "openpyxl",
     "periodictable",
     "mpltern",
+    "requests",
 ]
 
 [project.optional-dependencies]
