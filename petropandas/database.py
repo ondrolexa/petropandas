@@ -8,6 +8,8 @@ class PetroDB:
     def __init__(self, api_url: str, username: str, password: str):
         self.auth = {"username": username, "password": password}
         self.api_url = api_url
+        # test credentials
+        _ = self.authorize()
 
     def authorize(self):
         response = requests.post(f"{self.api_url}/token", data=self.auth)
@@ -92,6 +94,8 @@ class PetroDB:
                     [row["values"] for row in r],
                     index=pd.Index([row["id"] for row in r]),
                 )
+                # restore nan
+                res[res == -1] = pd.NA
                 res["label"] = [row["label"] for row in r]
                 res["mineral"] = [row["mineral"] for row in r]
                 return res
@@ -118,6 +122,9 @@ class PetroDB:
     ):
         """Batch spot insert"""
 
+        # fix nan
+        vals = df[df.oxides._names].copy()
+        vals[pd.isna(vals)] = -1
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
         else:
@@ -127,9 +134,7 @@ class PetroDB:
         else:
             minerals = df[mineral_col].str.strip()
         spots = []
-        for label, mineral, (ix, row) in zip(
-            labels, minerals, df[df.oxides._names].iterrows()
-        ):
+        for label, mineral, (ix, row) in zip(labels, minerals, vals.iterrows()):
             spots.append({"label": label, "mineral": mineral, "values": row.to_dict()})
         response = self.post(f"/spots/{project['id']}/{sample['id']}", spots)
         if response.ok:
@@ -146,6 +151,8 @@ class PetroDB:
             res = pd.DataFrame(
                 [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
             )
+            # restore nan
+            res[res == -1] = pd.NA
             res["label"] = [row["label"] for row in r]
             res["weight"] = [row["weight"] for row in r]
             return res
@@ -172,6 +179,9 @@ class PetroDB:
     ):
         """Batch area insert"""
 
+        # fix nan
+        vals = df[df.oxides._names].copy()
+        vals[pd.isna(vals)] = -1
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
         else:
@@ -181,9 +191,7 @@ class PetroDB:
         else:
             weights = df[weight_col]
         areas = []
-        for label, weight, (ix, row) in zip(
-            labels, weights, df[df.oxides._names].iterrows()
-        ):
+        for label, weight, (ix, row) in zip(labels, weights, vals.iterrows()):
             areas.append(
                 {"label": label, "weight": float(weight), "values": row.to_dict()}
             )
@@ -230,6 +238,8 @@ class PetroDB:
             res = pd.DataFrame(
                 [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
             )
+            # restore nan
+            res[res == -1] = pd.NA
             res["index"] = [row["index"] for row in r]
             return res
         else:
@@ -252,13 +262,59 @@ class PetroDB:
     ):
         """Batch profilespots insert"""
 
+        # fix nan
+        vals = df[df.oxides._names].copy()
+        vals[pd.isna(vals)] = -1
         profilespots = []
-        for index, row in df[df.oxides._names].iterrows():
+        for index, row in vals.iterrows():
             profilespots.append({"index": index, "values": row.to_dict()})
         response = self.post(
             f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}",
             profilespots,
         )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+
+class PetroDBAdmin:
+    """Admin client for postresql petrodb database API."""
+
+    def __init__(self, api_url: str, username: str, password: str):
+        self.auth = {"username": username, "password": password}
+        self.api_url = api_url
+        # test credentials
+        _ = self.authorize()
+
+    def authorize(self):
+        response = requests.post(f"{self.api_url}/token", data=self.auth)
+        if response.ok:
+            token = response.json()
+            return {"Authorization": f"Bearer {token.get('access_token')}"}
+        else:
+            raise ValueError("Wrong url or credentials")
+
+    def get(self, path):
+        headers = self.authorize()
+        return requests.get(f"{self.api_url}/api{path}", headers=headers)
+
+    def post(self, path, data):
+        headers = self.authorize()
+        return requests.post(f"{self.api_url}/api{path}", json=data, headers=headers)
+
+    # ---------- USERS
+
+    def users(self, name: str | None = None):
+        response = self.get("/users")
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def create_user(self, username: str, password: str, email: str):
+        data = {"username": username, "password": password, "email": email}
+        response = self.post("/user", data)
         if response.ok:
             return response.json()
         else:
