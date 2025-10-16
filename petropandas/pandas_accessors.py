@@ -882,20 +882,20 @@ class OxidesAccessor(AccessorTemplate):
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
-            Dataframe with calculated endmembers
+            Dataframe with apfu for given mineral
 
         """
         force = kwargs.get("force", False)
         if mineral.has_endmembers:
             if mineral.needsFe == "Fe2":
-                dt = self.convert_Fe()
+                dt = self.convert_Fe(**kwargs)
             elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat)
+                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat, **kwargs)
             else:
                 dt = self.df()
             cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
             res = []
-            for _, row in cations.iterrows():
+            for _, row in cations.ions.df().iterrows():
                 res.append(mineral.apfu(row, force=force))
             return self._final(pd.DataFrame(res, index=self._obj.index), **kwargs)
         else:
@@ -909,23 +909,22 @@ class OxidesAccessor(AccessorTemplate):
 
         Keyword Args:
             force (bool): when True, remaining cations are added to last site
-            keep (list): list of additional columns to be included. Default [].
 
         Returns:
-            Dataframe with calculated endmembers
+            Series with calculated misfit
 
         """
         force = kwargs.get("force", False)
         if mineral.has_endmembers:
             if mineral.needsFe == "Fe2":
-                dt = self.convert_Fe()
+                dt = self.convert_Fe(**kwargs)
             elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat)
+                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat, **kwargs)
             else:
                 dt = self.df()
             cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
             res = []
-            for _, row in cations.iterrows():
+            for _, row in cations.ions.df().iterrows():
                 res.append(mineral.check_stechiometry(row, force=force))
             return pd.Series(res, index=self._obj.index, name="misfit")
         else:
