@@ -29,7 +29,8 @@ class PetroDB:
 
     # ---------- PROJECTS
 
-    def projects(self, name: str | None = None):
+    def projects(self, **kwargs):
+        name = kwargs.get("name", None)
         if name is not None:
             response = self.get(f"/search/project/{name}")
             if response.ok:
@@ -53,7 +54,8 @@ class PetroDB:
 
     # ---------- SAMPLES
 
-    def samples(self, project: dict, name: str | None = None):
+    def samples(self, project: dict, **kwargs):
+        name = kwargs.get("name", None)
         if name is not None:
             response = self.get(f"/search/sample/{project['id']}/{name}")
             if response.ok:
@@ -77,13 +79,26 @@ class PetroDB:
 
     # ---------- SPOTS
 
-    def spots(self, project: dict, sample: dict, mineral: str | None = None):
+    def spots(self, project: dict, sample: dict, **kwargs):
+        mineral = kwargs.get("mineral", None)
+        sample_name = kwargs.get("sample_name", False)
         if mineral is not None:
             response = self.get(
                 f"/search/spots/{project['id']}/{sample['id']}/{mineral}"
             )
             if response.ok:
-                return response.json()
+                r = response.json()
+                res = pd.DataFrame(
+                    [row["values"] for row in r],
+                    index=pd.Index([row["id"] for row in r]),
+                )
+                # restore nan
+                res[res == -1] = pd.NA
+                res["label"] = [row["label"] for row in r]
+                res["mineral"] = [row["mineral"] for row in r]
+                if sample_name:
+                    res["sample"] = sample["name"]
+                return res
             else:
                 raise ValueError(response.json()["detail"])
         else:
@@ -98,6 +113,8 @@ class PetroDB:
                 res[res == -1] = pd.NA
                 res["label"] = [row["label"] for row in r]
                 res["mineral"] = [row["mineral"] for row in r]
+                if sample_name:
+                    res["sample"] = sample["name"]
                 return res
             else:
                 raise ValueError(response.json()["detail"])
@@ -144,7 +161,8 @@ class PetroDB:
 
     # ---------- AREAS
 
-    def areas(self, project: dict, sample: dict):
+    def areas(self, project: dict, sample: dict, **kwargs):
+        sample_name = kwargs.get("sample_name", False)
         response = self.get(f"/areas/{project['id']}/{sample['id']}")
         if response.ok:
             r = response.json()
@@ -155,6 +173,8 @@ class PetroDB:
             res[res == -1] = pd.NA
             res["label"] = [row["label"] for row in r]
             res["weight"] = [row["weight"] for row in r]
+            if sample_name:
+                res["sample"] = sample["name"]
             return res
         else:
             raise ValueError(response.json()["detail"])
@@ -203,7 +223,8 @@ class PetroDB:
 
     # ---------- PROFILES
 
-    def profiles(self, project: dict, sample: dict, label: str | None = None):
+    def profiles(self, project: dict, sample: dict, **kwargs):
+        label = kwargs.get("label", None)
         if label is not None:
             response = self.get(
                 f"/search/profile/{project['id']}/{sample['id']}/{label}"
@@ -229,7 +250,8 @@ class PetroDB:
 
     # ---------- PROFILE SPOTS
 
-    def profilespots(self, project: dict, sample: dict, profile: dict):
+    def profilespots(self, project: dict, sample: dict, profile: dict, **kwargs):
+        sample_name = kwargs.get("sample_name", False)
         response = self.get(
             f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}"
         )
@@ -241,6 +263,8 @@ class PetroDB:
             # restore nan
             res[res == -1] = pd.NA
             res["index"] = [row["index"] for row in r]
+            if sample_name:
+                res["sample"] = sample["name"]
             return res
         else:
             raise ValueError(response.json()["detail"])

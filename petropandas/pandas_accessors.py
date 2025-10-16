@@ -362,6 +362,9 @@ class PetroPlotsAccessor:
             kind (str): Kind of plot. One of `scatter`, `plot`
                 Deafult `scatter`
             ternary_sum (float): Total sum. Default 1.0
+            tlim (tuple): top limits. Default(0, 1)
+            llim (tuple): top limits. Default(0, 1)
+            rlim (tuple): top limits. Default(0, 1)
             ax (Axes): matplotlib axes to be used.
             return_ax (bool): Whether to return matplotlib axes.
                 Default False
@@ -380,6 +383,9 @@ class PetroPlotsAccessor:
         else:
             fig = plt.figure()
             ax = fig.add_subplot(projection="ternary", ternary_sum=ternary_sum)
+        ax.set_tlim(*kwargs.pop("tlim", (0, 1)))
+        ax.set_llim(*kwargs.pop("llim", (0, 1)))
+        ax.set_rlim(*kwargs.pop("rlim", (0, 1)))
         ax.set_tlabel(top)
         ax.set_llabel(left)
         ax.set_rlabel(right)
@@ -942,14 +948,14 @@ class OxidesAccessor(AccessorTemplate):
         force = kwargs.get("force", False)
         if mineral.has_endmembers:
             if mineral.needsFe == "Fe2":
-                dt = self.convert_Fe()
+                dt = self.convert_Fe(**kwargs)
             elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat)
+                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat, **kwargs)
             else:
                 dt = self.df()
             cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
             res = []
-            for _, row in cations.iterrows():
+            for _, row in cations.ions.df().iterrows():
                 res.append(mineral.endmembers(row, force=force))
             return self._final(pd.DataFrame(res, index=self._obj.index), **kwargs)
         else:
