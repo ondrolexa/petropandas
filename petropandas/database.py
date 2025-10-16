@@ -38,7 +38,7 @@ class PetroDB:
             else:
                 raise ValueError(response.json()["detail"])
         else:
-            response = self.get("/projects")
+            response = self.get("/projects/")
             if response.ok:
                 return response.json()
             else:
@@ -46,7 +46,7 @@ class PetroDB:
 
     def create_project(self, name: str, description: str = ""):
         data = {"name": name, "description": description}
-        response = self.post("/project", data)
+        response = self.post("/project/", data)
         if response.ok:
             return response.json()
         else:
@@ -330,7 +330,7 @@ class PetroDBAdmin:
     # ---------- USERS
 
     def users(self, name: str | None = None):
-        response = self.get("/users")
+        response = self.get("/users/")
         if response.ok:
             return response.json()
         else:
@@ -338,7 +338,7 @@ class PetroDBAdmin:
 
     def create_user(self, username: str, password: str, email: str):
         data = {"username": username, "password": password, "email": email}
-        response = self.post("/user", data)
+        response = self.post("/user/", data)
         if response.ok:
             return response.json()
         else:
