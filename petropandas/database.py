@@ -2,18 +2,6 @@ import pandas as pd
 import requests
 
 
-def encodenans(df):
-    ncol = df.select_dtypes(include="number").columns
-    df = df.fillna(value={col: -9999 for col in ncol})
-    scol = df.select_dtypes(include="object").columns
-    df = df.fillna(value={col: "" for col in scol})
-    return df
-
-
-def decodenans(df):
-    return df.replace(-9999, float("nan"))
-
-
 class PetroDB:
     """Client for postresql petrodb database API."""
 
@@ -103,9 +91,7 @@ class PetroDB:
 
     def spots(self, project: dict, sample: dict = {}, **kwargs):
         mineral = kwargs.get("mineral", None)
-        sample_name = kwargs.get("sample_name", False)
         if not sample:
-            kwargs["sample_name"] = True
             res = []
             for sample in self.samples(project):
                 try:
@@ -121,20 +107,13 @@ class PetroDB:
             response = self.get(f"/spots/{project['id']}/{sample['id']}")
         if response.ok:
             r = response.json()
-            res_values = pd.DataFrame(
+            res = pd.DataFrame(
                 [row["values"] for row in r],
                 index=pd.Index([row["id"] for row in r]),
             )
-            res_others = pd.DataFrame(
-                [row["others"] for row in r],
-                index=pd.Index([row["id"] for row in r]),
-            )
-            # restore nan
-            res = pd.concat([decodenans(res_values), decodenans(res_others)], axis=1)
+            res["sample"] = sample["name"]
             res["label"] = [row["label"] for row in r]
             res["mineral"] = [row["mineral"] for row in r]
-            if sample_name:
-                res["sample"] = sample["name"]
             return res
         else:
             raise ValueError(response.json()["detail"])
@@ -146,9 +125,8 @@ class PetroDB:
         label: str,
         mineral: str,
         values: dict,
-        others: dict,
     ):
-        data = {"label": label, "mineral": mineral, "values": values, "others": values}
+        data = {"label": label, "mineral": mineral, "values": values}
         response = self.post(f"/spot/{project['id']}/{sample['id']}", data)
         if response.ok:
             return response.json()
@@ -166,26 +144,24 @@ class PetroDB:
         """Batch spot insert"""
 
         # fix nan
-        vals = encodenans(df[df.oxides._names].copy())
-        others = encodenans(df[df.oxides._others].copy())
+        df = df.copy()
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
         else:
             labels = df[label_col].str.strip()
+            df.drop(label_col, axis=1, inplace=True)
         if mineral_col is None:
             minerals = pd.Series("", index=df.index)
         else:
             minerals = df[mineral_col].str.strip()
+            df.drop(mineral_col, axis=1, inplace=True)
         spots = []
-        for label, mineral, (vix, vrow), (oix, orow) in zip(
-            labels, minerals, vals.iterrows(), others.iterrows()
-        ):
+        for label, mineral, (ix, row) in zip(labels, minerals, df.iterrows()):
             spots.append(
                 {
                     "label": label,
                     "mineral": mineral,
-                    "values": vrow.to_dict(),
-                    "others": orow.to_dict(),
+                    "values": row.dropna().to_dict(),
                 }
             )
         response = self.post(f"/spots/{project['id']}/{sample['id']}", spots)
@@ -196,28 +172,29 @@ class PetroDB:
 
     # ---------- AREAS
 
-    def areas(self, project: dict, sample: dict, **kwargs):
-        sample_name = kwargs.get("sample_name", False)
+    def areas(self, project: dict, sample: dict = {}):
+        if not sample:
+            res = []
+            for sample in self.samples(project):
+                try:
+                    res.append(self.areas(project, sample))
+                except ValueError:
+                    pass
+            return pd.concat(res, axis=0)
         response = self.get(f"/areas/{project['id']}/{sample['id']}")
         if response.ok:
             r = response.json()
             res = pd.DataFrame(
                 [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
             )
-            # restore nan
-            res[res == -1] = pd.NA
             res["label"] = [row["label"] for row in r]
-            res["weight"] = [row["weight"] for row in r]
-            if sample_name:
-                res["sample"] = sample["name"]
+            res["sample"] = sample["name"]
             return res
         else:
             raise ValueError(response.json()["detail"])
 
-    def create_area(
-        self, project: dict, sample: dict, label: str, weight: float, values: dict
-    ):
-        data = {"label": label, "weight": weight, "values": values}
+    def create_area(self, project: dict, sample: dict, label: str, values: dict):
+        data = {"label": label, "values": values}
         response = self.post(f"/area/{project['id']}/{sample['id']}", data)
         if response.ok:
             return response.json()
@@ -230,26 +207,19 @@ class PetroDB:
         sample: dict,
         df: pd.DataFrame,
         label_col: str | None = None,
-        weight_col: str | None = None,
     ):
         """Batch area insert"""
 
         # fix nan
-        vals = df[df.oxides._names].copy()
-        vals[pd.isna(vals)] = -1
+        df = df.copy()
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
         else:
             labels = df[label_col].str.strip()
-        if weight_col is None:
-            weights = pd.Series(1, index=df.index)
-        else:
-            weights = df[weight_col]
+            df.drop(label_col, axis=1, inplace=True)
         areas = []
-        for label, weight, (ix, row) in zip(labels, weights, vals.iterrows()):
-            areas.append(
-                {"label": label, "weight": float(weight), "values": row.to_dict()}
-            )
+        for label, (ix, row) in zip(labels, df.iterrows()):
+            areas.append({"label": label, "values": row.dropna().to_dict()})
         response = self.post(f"/areas/{project['id']}/{sample['id']}", areas)
         if response.ok:
             return response.json()
@@ -285,8 +255,7 @@ class PetroDB:
 
     # ---------- PROFILE SPOTS
 
-    def profilespots(self, project: dict, sample: dict, profile: dict, **kwargs):
-        sample_name = kwargs.get("sample_name", False)
+    def profilespots(self, project: dict, sample: dict, profile: dict):
         response = self.get(
             f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}"
         )
@@ -295,11 +264,8 @@ class PetroDB:
             res = pd.DataFrame(
                 [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
             )
-            # restore nan
-            res[res == -1] = pd.NA
             res["index"] = [row["index"] for row in r]
-            if sample_name:
-                res["sample"] = sample["name"]
+            res["sample"] = sample["name"]
             return res
         else:
             raise ValueError(response.json()["detail"])
@@ -322,11 +288,10 @@ class PetroDB:
         """Batch profilespots insert"""
 
         # fix nan
-        vals = df[df.oxides._names].copy()
-        vals[pd.isna(vals)] = -1
+        df = df.copy()
         profilespots = []
-        for index, row in vals.iterrows():
-            profilespots.append({"index": index, "values": row.to_dict()})
+        for index, row in df.iterrows():
+            profilespots.append({"index": index, "values": row.dropna().to_dict()})
         response = self.post(
             f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}",
             profilespots,
