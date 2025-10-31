@@ -2,6 +2,18 @@ import pandas as pd
 import requests
 
 
+def encodenans(df):
+    ncol = df.select_dtypes(include="number").columns
+    df = df.fillna(value={col: -9999 for col in ncol})
+    scol = df.select_dtypes(include="object").columns
+    df = df.fillna(value={col: "" for col in scol})
+    return df
+
+
+def decodenans(df):
+    return df.replace(-9999, float("nan"))
+
+
 class PetroDB:
     """Client for postresql petrodb database API."""
 
@@ -36,7 +48,12 @@ class PetroDB:
             if response.ok:
                 return response.json()
             else:
-                raise ValueError(response.json()["detail"])
+                if kwargs.get("create", False):
+                    return self.create_project(
+                        name, description=kwargs.get("description", "")
+                    )
+                else:
+                    raise ValueError(response.json()["detail"])
         else:
             response = self.get("/projects/")
             if response.ok:
@@ -61,7 +78,12 @@ class PetroDB:
             if response.ok:
                 return response.json()
             else:
-                raise ValueError(response.json()["detail"])
+                if kwargs.get("create", False):
+                    return self.create_sample(
+                        project, name, description=kwargs.get("description", "")
+                    )
+                else:
+                    raise ValueError(response.json()["detail"])
         else:
             response = self.get(f"/samples/{project['id']}")
             if response.ok:
@@ -79,50 +101,54 @@ class PetroDB:
 
     # ---------- SPOTS
 
-    def spots(self, project: dict, sample: dict, **kwargs):
+    def spots(self, project: dict, sample: dict = {}, **kwargs):
         mineral = kwargs.get("mineral", None)
         sample_name = kwargs.get("sample_name", False)
+        if not sample:
+            kwargs["sample_name"] = True
+            res = []
+            for sample in self.samples(project):
+                try:
+                    res.append(self.spots(project, sample, **kwargs))
+                except ValueError:
+                    pass
+            return pd.concat(res, axis=0)
         if mineral is not None:
             response = self.get(
                 f"/search/spots/{project['id']}/{sample['id']}/{mineral}"
             )
-            if response.ok:
-                r = response.json()
-                res = pd.DataFrame(
-                    [row["values"] for row in r],
-                    index=pd.Index([row["id"] for row in r]),
-                )
-                # restore nan
-                res[res == -1] = pd.NA
-                res["label"] = [row["label"] for row in r]
-                res["mineral"] = [row["mineral"] for row in r]
-                if sample_name:
-                    res["sample"] = sample["name"]
-                return res
-            else:
-                raise ValueError(response.json()["detail"])
         else:
             response = self.get(f"/spots/{project['id']}/{sample['id']}")
-            if response.ok:
-                r = response.json()
-                res = pd.DataFrame(
-                    [row["values"] for row in r],
-                    index=pd.Index([row["id"] for row in r]),
-                )
-                # restore nan
-                res[res == -1] = pd.NA
-                res["label"] = [row["label"] for row in r]
-                res["mineral"] = [row["mineral"] for row in r]
-                if sample_name:
-                    res["sample"] = sample["name"]
-                return res
-            else:
-                raise ValueError(response.json()["detail"])
+        if response.ok:
+            r = response.json()
+            res_values = pd.DataFrame(
+                [row["values"] for row in r],
+                index=pd.Index([row["id"] for row in r]),
+            )
+            res_others = pd.DataFrame(
+                [row["others"] for row in r],
+                index=pd.Index([row["id"] for row in r]),
+            )
+            # restore nan
+            res = pd.concat([decodenans(res_values), decodenans(res_others)], axis=1)
+            res["label"] = [row["label"] for row in r]
+            res["mineral"] = [row["mineral"] for row in r]
+            if sample_name:
+                res["sample"] = sample["name"]
+            return res
+        else:
+            raise ValueError(response.json()["detail"])
 
     def create_spot(
-        self, project: dict, sample: dict, label: str, mineral: str, values: dict
+        self,
+        project: dict,
+        sample: dict,
+        label: str,
+        mineral: str,
+        values: dict,
+        others: dict,
     ):
-        data = {"label": label, "mineral": mineral, "values": values}
+        data = {"label": label, "mineral": mineral, "values": values, "others": values}
         response = self.post(f"/spot/{project['id']}/{sample['id']}", data)
         if response.ok:
             return response.json()
@@ -140,8 +166,8 @@ class PetroDB:
         """Batch spot insert"""
 
         # fix nan
-        vals = df[df.oxides._names].copy()
-        vals[pd.isna(vals)] = -1
+        vals = encodenans(df[df.oxides._names].copy())
+        others = encodenans(df[df.oxides._others].copy())
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
         else:
@@ -151,8 +177,17 @@ class PetroDB:
         else:
             minerals = df[mineral_col].str.strip()
         spots = []
-        for label, mineral, (ix, row) in zip(labels, minerals, vals.iterrows()):
-            spots.append({"label": label, "mineral": mineral, "values": row.to_dict()})
+        for label, mineral, (vix, vrow), (oix, orow) in zip(
+            labels, minerals, vals.iterrows(), others.iterrows()
+        ):
+            spots.append(
+                {
+                    "label": label,
+                    "mineral": mineral,
+                    "values": vrow.to_dict(),
+                    "others": orow.to_dict(),
+                }
+            )
         response = self.post(f"/spots/{project['id']}/{sample['id']}", spots)
         if response.ok:
             return response.json()
