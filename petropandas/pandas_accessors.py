@@ -29,6 +29,19 @@ config = {
     "agecols": AGECOLS,
     "isoplot_formats": ISOPLOT_FORMATS,
     "ree_plot": REE_PLOT,
+    "oxides_order": [
+        "SiO2",
+        "Al2O3",
+        "FeO",
+        "Fe2O3",
+        "CaO",
+        "MgO",
+        "Na2O",
+        "K2O",
+        "TiO2",
+        "P2O5",
+        "MnO",
+    ],
 }
 
 germ = importlib.resources.files("petropandas").joinpath("data", "germ.json")
@@ -626,13 +639,15 @@ class OxidesAccessor(AccessorTemplate):
     def _validate(self, obj):
         # verify there is a oxides column
         valid = []
+        names = []
+        props = []
         for col in obj.columns:
             try:
                 f = formula(col)
                 if (len(f.atoms) == 2) and (elements.name("oxygen") in f.atoms):
                     valid.append(True)
-                    self._names.append(col)
-                    self._names_props.append(oxideprops(f))
+                    names.append(col)
+                    props.append(oxideprops(f))
                 else:
                     valid.append(False)
                     self._others.append(col)
@@ -641,6 +656,14 @@ class OxidesAccessor(AccessorTemplate):
                 self._others.append(col)
         if not any(valid):
             raise MissingColumns("oxides")
+        # sort names
+        for ox in config["oxides_order"]:
+            if ox in names:
+                ix = names.index(ox)
+                self._names.append(names.pop(ix))
+                self._names_props.append(props.pop(ix))
+        self._names.extend(names)
+        self._names_props.extend(props)
 
     def molprop(self, **kwargs) -> pd.DataFrame:
         """Convert oxides weight percents to molar proportions.
