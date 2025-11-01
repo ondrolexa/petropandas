@@ -2,6 +2,16 @@ import pandas as pd
 import requests
 
 
+def zero_negative_nan(x):
+    if isinstance(x, (int, float, complex)) and not isinstance(x, bool):
+        if x > 0:
+            return x
+        else:
+            return float("nan")
+    else:
+        return x
+
+
 class PetroDB:
     """Client for postresql petrodb database API."""
 
@@ -142,8 +152,6 @@ class PetroDB:
         mineral_col: str | None = None,
     ):
         """Batch spot insert"""
-
-        # fix nan
         df = df.copy()
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
@@ -161,7 +169,7 @@ class PetroDB:
                 {
                     "label": label,
                     "mineral": mineral,
-                    "values": row.dropna().to_dict(),
+                    "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
         response = self.post(f"/spots/{project['id']}/{sample['id']}", spots)
@@ -209,8 +217,6 @@ class PetroDB:
         label_col: str | None = None,
     ):
         """Batch area insert"""
-
-        # fix nan
         df = df.copy()
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
@@ -219,7 +225,12 @@ class PetroDB:
             df.drop(label_col, axis=1, inplace=True)
         areas = []
         for label, (ix, row) in zip(labels, df.iterrows()):
-            areas.append({"label": label, "values": row.dropna().to_dict()})
+            areas.append(
+                {
+                    "label": label,
+                    "values": row.apply(zero_negative_nan).dropna().to_dict(),
+                }
+            )
         response = self.post(f"/areas/{project['id']}/{sample['id']}", areas)
         if response.ok:
             return response.json()
@@ -286,12 +297,15 @@ class PetroDB:
         self, project: dict, sample: dict, profile: dict, df: pd.DataFrame
     ):
         """Batch profilespots insert"""
-
-        # fix nan
         df = df.copy()
         profilespots = []
         for index, row in df.iterrows():
-            profilespots.append({"index": index, "values": row.dropna().to_dict()})
+            profilespots.append(
+                {
+                    "index": index,
+                    "values": row.apply(zero_negative_nan).dropna().to_dict(),
+                }
+            )
         response = self.post(
             f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}",
             profilespots,
