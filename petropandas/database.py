@@ -16,33 +16,41 @@ class PetroDB:
     """Client for postresql petrodb database API."""
 
     def __init__(self, api_url: str, username: str, password: str):
-        self.auth = {"username": username, "password": password}
-        self.api_url = api_url
+        self.__auth = {"username": username, "password": password}
+        self.__api_url = api_url
         # test credentials
-        _ = self.authorize()
+        _ = self.__authorize()
 
-    def authorize(self):
-        response = requests.post(f"{self.api_url}/token", data=self.auth)
+    def __authorize(self):
+        response = requests.post(f"{self.__api_url}/token", data=self.__auth)
         if response.ok:
             token = response.json()
             return {"Authorization": f"Bearer {token.get('access_token')}"}
         else:
             raise ValueError("Wrong url or credentials")
 
-    def get(self, path):
-        headers = self.authorize()
-        return requests.get(f"{self.api_url}/api{path}", headers=headers)
+    def __get(self, path):
+        headers = self.__authorize()
+        return requests.get(f"{self.__api_url}/api{path}", headers=headers)
 
-    def post(self, path, data):
-        headers = self.authorize()
-        return requests.post(f"{self.api_url}/api{path}", json=data, headers=headers)
+    def __post(self, path, data):
+        headers = self.__authorize()
+        return requests.post(f"{self.__api_url}/api{path}", json=data, headers=headers)
+
+    def __put(self, path, data):
+        headers = self.__authorize()
+        return requests.put(f"{self.__api_url}/api{path}", json=data, headers=headers)
+
+    def __delete(self, path):
+        headers = self.__authorize()
+        return requests.delete(f"{self.__api_url}/api{path}", headers=headers)
 
     # ---------- PROJECTS
 
     def projects(self, **kwargs):
         name = kwargs.get("name", None)
         if name is not None:
-            response = self.get(f"/search/project/{name}")
+            response = self.__get(f"/search/project/{name}")
             if response.ok:
                 return response.json()
             else:
@@ -53,7 +61,7 @@ class PetroDB:
                 else:
                     raise ValueError(response.json()["detail"])
         else:
-            response = self.get("/projects/")
+            response = self.__get("/projects/")
             if response.ok:
                 return response.json()
             else:
@@ -61,7 +69,14 @@ class PetroDB:
 
     def create_project(self, name: str, description: str = ""):
         data = {"name": name, "description": description}
-        response = self.post("/project/", data)
+        response = self.__post("/project/", data)
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def delete_project(self, project_id):
+        response = self.__delete(f"/project/{project_id}")
         if response.ok:
             return response.json()
         else:
@@ -72,7 +87,7 @@ class PetroDB:
     def samples(self, project: dict, **kwargs):
         name = kwargs.get("name", None)
         if name is not None:
-            response = self.get(f"/search/sample/{project['id']}/{name}")
+            response = self.__get(f"/search/sample/{project['id']}/{name}")
             if response.ok:
                 return response.json()
             else:
@@ -83,7 +98,7 @@ class PetroDB:
                 else:
                     raise ValueError(response.json()["detail"])
         else:
-            response = self.get(f"/samples/{project['id']}")
+            response = self.__get(f"/samples/{project['id']}")
             if response.ok:
                 return response.json()
             else:
@@ -91,7 +106,14 @@ class PetroDB:
 
     def create_sample(self, project: dict, name: str, description: str = ""):
         data = {"name": name, "description": description}
-        response = self.post(f"/sample/{project['id']}", data)
+        response = self.__post(f"/sample/{project['id']}", data)
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def delete_sample(self, project: dict, sample_id: int):
+        response = self.__delete(f"/sample/{project['id']}/{sample_id}")
         if response.ok:
             return response.json()
         else:
@@ -110,11 +132,11 @@ class PetroDB:
                     pass
             return pd.concat(res, axis=0)
         if mineral is not None:
-            response = self.get(
+            response = self.__get(
                 f"/search/spots/{project['id']}/{sample['id']}/{mineral}"
             )
         else:
-            response = self.get(f"/spots/{project['id']}/{sample['id']}")
+            response = self.__get(f"/spots/{project['id']}/{sample['id']}")
         if response.ok:
             r = response.json()
             res = pd.DataFrame(
@@ -137,7 +159,14 @@ class PetroDB:
         values: dict,
     ):
         data = {"label": label, "mineral": mineral, "values": values}
-        response = self.post(f"/spot/{project['id']}/{sample['id']}", data)
+        response = self.__post(f"/spot/{project['id']}/{sample['id']}", data)
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def delete_spot(self, project: dict, sample: dict, spot_id: int):
+        response = self.__delete(f"/spot/{project['id']}/{sample['id']}/{spot_id}")
         if response.ok:
             return response.json()
         else:
@@ -172,7 +201,7 @@ class PetroDB:
                     "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
-        response = self.post(f"/spots/{project['id']}/{sample['id']}", spots)
+        response = self.__post(f"/spots/{project['id']}/{sample['id']}", spots)
         if response.ok:
             return response.json()
         else:
@@ -189,7 +218,7 @@ class PetroDB:
                 except ValueError:
                     pass
             return pd.concat(res, axis=0)
-        response = self.get(f"/areas/{project['id']}/{sample['id']}")
+        response = self.__get(f"/areas/{project['id']}/{sample['id']}")
         if response.ok:
             r = response.json()
             res = pd.DataFrame(
@@ -203,7 +232,14 @@ class PetroDB:
 
     def create_area(self, project: dict, sample: dict, label: str, values: dict):
         data = {"label": label, "values": values}
-        response = self.post(f"/area/{project['id']}/{sample['id']}", data)
+        response = self.__post(f"/area/{project['id']}/{sample['id']}", data)
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def delete_area(self, project: dict, sample: dict, area_id: int):
+        response = self.__delete(f"/area/{project['id']}/{sample['id']}/{area_id}")
         if response.ok:
             return response.json()
         else:
@@ -231,7 +267,7 @@ class PetroDB:
                     "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
-        response = self.post(f"/areas/{project['id']}/{sample['id']}", areas)
+        response = self.__post(f"/areas/{project['id']}/{sample['id']}", areas)
         if response.ok:
             return response.json()
         else:
@@ -242,7 +278,7 @@ class PetroDB:
     def profiles(self, project: dict, sample: dict, **kwargs):
         label = kwargs.get("label", None)
         if label is not None:
-            response = self.get(
+            response = self.__get(
                 f"/search/profile/{project['id']}/{sample['id']}/{label}"
             )
             if response.ok:
@@ -250,7 +286,7 @@ class PetroDB:
             else:
                 raise ValueError(response.json()["detail"])
         else:
-            response = self.get(f"/profiles/{project['id']}/{sample['id']}")
+            response = self.__get(f"/profiles/{project['id']}/{sample['id']}")
             if response.ok:
                 return response.json()
             else:
@@ -258,7 +294,16 @@ class PetroDB:
 
     def create_profile(self, project: dict, sample: dict, label: str, mineral: str):
         data = {"label": label, "mineral": mineral}
-        response = self.post(f"/profile/{project['id']}/{sample['id']}", data)
+        response = self.__post(f"/profile/{project['id']}/{sample['id']}", data)
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def delete_profile(self, project: dict, sample: dict, profile_id: int):
+        response = self.__delete(
+            f"/profile/{project['id']}/{sample['id']}/{profile_id}"
+        )
         if response.ok:
             return response.json()
         else:
@@ -267,7 +312,7 @@ class PetroDB:
     # ---------- PROFILE SPOTS
 
     def profilespots(self, project: dict, sample: dict, profile: dict):
-        response = self.get(
+        response = self.__get(
             f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}"
         )
         if response.ok:
@@ -285,8 +330,19 @@ class PetroDB:
         self, project: dict, sample: dict, profile: dict, index: int, values: dict
     ):
         data = {"index": index, "values": values}
-        response = self.post(
+        response = self.__post(
             f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}", data
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def delete_profilespot(
+        self, project: dict, sample: dict, profile: dict, profilespot_id: int
+    ):
+        response = self.__delete(
+            f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}/{profilespot_id}"
         )
         if response.ok:
             return response.json()
@@ -306,7 +362,7 @@ class PetroDB:
                     "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
-        response = self.post(
+        response = self.__post(
             f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}",
             profilespots,
         )
@@ -320,13 +376,13 @@ class PetroDBAdmin:
     """Admin client for postresql petrodb database API."""
 
     def __init__(self, api_url: str, username: str, password: str):
-        self.auth = {"username": username, "password": password}
-        self.api_url = api_url
+        self.__auth = {"username": username, "password": password}
+        self.__api_url = api_url
         # test credentials
-        _ = self.authorize()
+        _ = self.__authorize()
 
-    def authorize(self):
-        response = requests.post(f"{self.api_url}/token", data=self.auth)
+    def __authorize(self):
+        response = requests.post(f"{self.__api_url}/token", data=self.__auth)
         if response.ok:
             token = response.json()
             return {"Authorization": f"Bearer {token.get('access_token')}"}
@@ -334,17 +390,17 @@ class PetroDBAdmin:
             raise ValueError("Wrong url or credentials")
 
     def get(self, path):
-        headers = self.authorize()
-        return requests.get(f"{self.api_url}/api{path}", headers=headers)
+        headers = self.__authorize()
+        return requests.get(f"{self.__api_url}/api{path}", headers=headers)
 
     def post(self, path, data):
-        headers = self.authorize()
-        return requests.post(f"{self.api_url}/api{path}", json=data, headers=headers)
+        headers = self.__authorize()
+        return requests.post(f"{self.__api_url}/api{path}", json=data, headers=headers)
 
     # ---------- USERS
 
     def users(self, name: str | None = None):
-        response = self.get("/users/")
+        response = self.__get("/users/")
         if response.ok:
             return response.json()
         else:
@@ -352,7 +408,7 @@ class PetroDBAdmin:
 
     def create_user(self, username: str, password: str, email: str):
         data = {"username": username, "password": password, "email": email}
-        response = self.post("/user/", data)
+        response = self.__post("/user/", data)
         if response.ok:
             return response.json()
         else:
