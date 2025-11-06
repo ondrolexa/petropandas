@@ -75,8 +75,18 @@ class PetroDB:
         else:
             raise ValueError(response.json()["detail"])
 
-    def delete_project(self, project_id):
+    def delete_project(self, project_id: int):
         response = self.__delete(f"/project/{project_id}")
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def update_project(self, project_id: int, data: dict | None = None):
+        if data is None:
+            response = self.__get(f"/project/{project_id}")
+        else:
+            response = self.__put(f"/project/{project_id}", data)
         if response.ok:
             return response.json()
         else:
@@ -114,6 +124,16 @@ class PetroDB:
 
     def delete_sample(self, project: dict, sample_id: int):
         response = self.__delete(f"/sample/{project['id']}/{sample_id}")
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def update_sample(self, project: dict, sample_id: int, data: dict | None = None):
+        if data is None:
+            response = self.__get(f"/sample/{project['id']}/{sample_id}")
+        else:
+            response = self.__put(f"/sample/{project['id']}/{sample_id}", data)
         if response.ok:
             return response.json()
         else:
@@ -167,6 +187,20 @@ class PetroDB:
 
     def delete_spot(self, project: dict, sample: dict, spot_id: int):
         response = self.__delete(f"/spot/{project['id']}/{sample['id']}/{spot_id}")
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def update_spot(
+        self, project: dict, sample: dict, spot_id: int, data: dict | None = None
+    ):
+        if data is None:
+            response = self.__get(f"/spot/{project['id']}/{sample['id']}/{spot_id}")
+        else:
+            response = self.__put(
+                f"/spot/{project['id']}/{sample['id']}/{spot_id}", data
+            )
         if response.ok:
             return response.json()
         else:
@@ -245,6 +279,20 @@ class PetroDB:
         else:
             raise ValueError(response.json()["detail"])
 
+    def update_area(
+        self, project: dict, sample: dict, area_id: int, data: dict | None = None
+    ):
+        if data is None:
+            response = self.__get(f"/area/{project['id']}/{sample['id']}/{area_id}")
+        else:
+            response = self.__put(
+                f"/area/{project['id']}/{sample['id']}/{area_id}", data
+            )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
     def create_areas(
         self,
         project: dict,
@@ -309,6 +357,22 @@ class PetroDB:
         else:
             raise ValueError(response.json()["detail"])
 
+    def update_profile(
+        self, project: dict, sample: dict, profile_id: int, data: dict | None = None
+    ):
+        if data is None:
+            response = self.__get(
+                f"/profile/{project['id']}/{sample['id']}/{profile_id}"
+            )
+        else:
+            response = self.__put(
+                f"/profile/{project['id']}/{sample['id']}/{profile_id}", data
+            )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
     # ---------- PROFILE SPOTS
 
     def profilespots(self, project: dict, sample: dict, profile: dict):
@@ -344,6 +408,28 @@ class PetroDB:
         response = self.__delete(
             f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}/{profilespot_id}"
         )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def update_profilespot(
+        self,
+        project: dict,
+        sample: dict,
+        profile: dict,
+        profilespot_id: int,
+        data: dict | None = None,
+    ):
+        if data is None:
+            response = self.__get(
+                f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}/{profilespot_id}"
+            )
+        else:
+            response = self.__put(
+                f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}/{profilespot_id}",
+                data,
+            )
         if response.ok:
             return response.json()
         else:
@@ -389,11 +475,11 @@ class PetroDBAdmin:
         else:
             raise ValueError("Wrong url or credentials")
 
-    def get(self, path):
+    def __get(self, path):
         headers = self.__authorize()
         return requests.get(f"{self.__api_url}/api{path}", headers=headers)
 
-    def post(self, path, data):
+    def __post(self, path, data):
         headers = self.__authorize()
         return requests.post(f"{self.__api_url}/api{path}", json=data, headers=headers)
 
