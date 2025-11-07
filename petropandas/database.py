@@ -62,10 +62,7 @@ class PetroAPI:
 class PetroDB:
     """Petro DB database instance"""
 
-    def __init__(self):
-        pass
-
-    def login(self, api_url, username, password):
+    def __init__(self, api_url, username, password):
         self.__db = PetroAPI(api_url, username, password)
 
     def __repr__(self):
@@ -322,7 +319,6 @@ class PetroDBSample:
 
     def create_areas(
         self,
-        sample: dict,
         df: pd.DataFrame,
         label_col: str | None = None,
     ):
@@ -701,27 +697,8 @@ class PetroDBProfileSpot:
 class PetroDBAdmin:
     """Admin client for postresql petrodb database API."""
 
-    def __init__(self, api_url: str, username: str, password: str):
-        self.__auth = {"username": username, "password": password}
-        self.__api_url = api_url
-        # test credentials
-        _ = self.__authorize()
-
-    def __authorize(self):
-        response = requests.post(f"{self.__api_url}/token", data=self.__auth)
-        if response.ok:
-            token = response.json()
-            return {"Authorization": f"Bearer {token.get('access_token')}"}
-        else:
-            raise ValueError("Wrong url or credentials")
-
-    def _get(self, path):
-        headers = self.__authorize()
-        return requests.get(f"{self.__api_url}/api{path}", headers=headers)
-
-    def _post(self, path, data):
-        headers = self.__authorize()
-        return requests.post(f"{self.__api_url}/api{path}", json=data, headers=headers)
+    def __init__(self, api_url, username, password):
+        self.__db = PetroAPI(api_url, username, password)
 
     # ---------- USERS
 
