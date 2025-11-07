@@ -1,3 +1,5 @@
+"""Client for postresql petrodb database API."""
+
 import pandas as pd
 import requests
 
@@ -13,16 +15,26 @@ def zero_negative_nan(x):
 
 
 class PetroDB:
-    """Client for postresql petrodb database API."""
+    """Petro DB database instance"""
 
-    def __init__(self, api_url: str, username: str, password: str):
-        self.__auth = {"username": username, "password": password}
-        self.__api_url = api_url
-        # test credentials
-        _ = self.__authorize()
+    def __init__(self, **kwargs):
+        self.__api_url = kwargs["api_url"]
+        self.__username = kwargs["username"]
+        self.__password = kwargs["password"]
+        self.__kwargs = {
+            "api_url": self.__api_url,
+            "username": self.__username,
+            "password": self.__password,
+        }
+
+    def repr(self):
+        return f"PetroDB at {self.__api_url}"
 
     def __authorize(self):
-        response = requests.post(f"{self.__api_url}/token", data=self.__auth)
+        response = requests.post(
+            f"{self.__api_url}/token",
+            data={"username": self.__username, "password": self.__password},
+        )
         if response.ok:
             token = response.json()
             return {"Authorization": f"Bearer {token.get('access_token')}"}
@@ -52,7 +64,7 @@ class PetroDB:
         if name is not None:
             response = self.__get(f"/search/project/{name}")
             if response.ok:
-                return response.json()
+                return PetroDBProject(project=response.json(), **self.__kwargs)
             else:
                 if kwargs.get("create", False):
                     return self.create_project(
@@ -63,7 +75,9 @@ class PetroDB:
         else:
             response = self.__get("/projects/")
             if response.ok:
-                return response.json()
+                return [
+                    PetroDBProject(project=p, **self.__kwargs) for p in response.json()
+                ]
             else:
                 raise ValueError(response.json()["detail"])
 
@@ -71,99 +85,100 @@ class PetroDB:
         data = {"name": name, "description": description}
         response = self.__post("/project/", data)
         if response.ok:
-            return response.json()
+            return PetroDBProject(project=response.json(), **self.__kwargs)
         else:
             raise ValueError(response.json()["detail"])
 
-    def delete_project(self, project_id: int):
-        response = self.__delete(f"/project/{project_id}")
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
 
-    def update_project(self, project_id: int, data: dict | None = None):
-        if data is None:
-            response = self.__get(f"/project/{project_id}")
-        else:
-            response = self.__put(f"/project/{project_id}", data)
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+class PetroDBProject(PetroDB):
+    """Petro DB project instance"""
 
-    # ---------- SAMPLES
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.__kwargs["project"] = self.project = kwargs["project"]
 
-    def samples(self, project: dict, **kwargs):
+    def samples(self, **kwargs):
         name = kwargs.get("name", None)
         if name is not None:
-            response = self.__get(f"/search/sample/{project['id']}/{name}")
+            response = self.__get(f"/search/sample/{self.project['id']}/{name}")
             if response.ok:
-                return response.json()
+                return PetroDBSample(sample=response.json(), **self.__kwargs)
             else:
-                if kwargs.get("create", False):
-                    return self.create_sample(
-                        project, name, description=kwargs.get("description", "")
-                    )
-                else:
-                    raise ValueError(response.json()["detail"])
+                raise ValueError(response.json()["detail"])
         else:
-            response = self.__get(f"/samples/{project['id']}")
+            response = self.__get(f"/samples/{self.project['id']}")
             if response.ok:
-                return response.json()
+                return [
+                    PetroDBSample(sample=s, **self.__kwargs) for s in response.json()
+                ]
             else:
                 raise ValueError(response.json()["detail"])
 
-    def create_sample(self, project: dict, name: str, description: str = ""):
+    def create_sample(self, name: str, description: str = ""):
         data = {"name": name, "description": description}
-        response = self.__post(f"/sample/{project['id']}", data)
+        response = self.__post(f"/sample/{self.project['id']}", data)
+        if response.ok:
+            return PetroDBSample(sample=response.json(), **self.__kwargs)
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def delete(self):
+        response = self.__delete(f"/project/{self.project['id']}")
         if response.ok:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
 
-    def delete_sample(self, project: dict, sample_id: int):
-        response = self.__delete(f"/sample/{project['id']}/{sample_id}")
+    def update(self, data: dict):
+        response = self.__put(f"/project/{self.project['id']}", data)
         if response.ok:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
 
-    def update_sample(self, project: dict, sample_id: int, data: dict | None = None):
-        if data is None:
-            response = self.__get(f"/sample/{project['id']}/{sample_id}")
-        else:
-            response = self.__put(f"/sample/{project['id']}/{sample_id}", data)
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+    def spots(self, **kwargs):
+        res = []
+        for sample in self.samples():
+            try:
+                res.append(sample.spots(**kwargs))
+            except ValueError:
+                pass
+        return pd.concat(res, axis=0)
 
-    # ---------- SPOTS
+    def areas(
+        self,
+    ):
+        res = []
+        for sample in self.samples():
+            try:
+                res.append(sample.areas())
+            except ValueError:
+                pass
+        return pd.concat(res, axis=0)
 
-    def spots(self, project: dict, sample: dict = {}, **kwargs):
+
+class PetroDBSample(PetroDBProject):
+    """Petro DB sample instance"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.__kwargs["sample"] = self.sample = kwargs["sample"]
+
+    def spots(self, **kwargs):
         mineral = kwargs.get("mineral", None)
-        if not sample:
-            res = []
-            for sample in self.samples(project):
-                try:
-                    res.append(self.spots(project, sample, **kwargs))
-                except ValueError:
-                    pass
-            return pd.concat(res, axis=0)
         if mineral is not None:
             response = self.__get(
-                f"/search/spots/{project['id']}/{sample['id']}/{mineral}"
+                f"/search/spots/{self.project['id']}/{self.sample['id']}/{mineral}"
             )
         else:
-            response = self.__get(f"/spots/{project['id']}/{sample['id']}")
+            response = self.__get(f"/spots/{self.project['id']}/{self.sample['id']}")
         if response.ok:
             r = response.json()
             res = pd.DataFrame(
                 [row["values"] for row in r],
                 index=pd.Index([row["id"] for row in r]),
             )
-            res["sample"] = sample["name"]
+            res["sample"] = self.sample["name"]
             res["label"] = [row["label"] for row in r]
             res["mineral"] = [row["mineral"] for row in r]
             return res
@@ -172,35 +187,12 @@ class PetroDB:
 
     def create_spot(
         self,
-        project: dict,
-        sample: dict,
         label: str,
         mineral: str,
         values: dict,
     ):
         data = {"label": label, "mineral": mineral, "values": values}
-        response = self.__post(f"/spot/{project['id']}/{sample['id']}", data)
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    def delete_spot(self, project: dict, sample: dict, spot_id: int):
-        response = self.__delete(f"/spot/{project['id']}/{sample['id']}/{spot_id}")
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    def update_spot(
-        self, project: dict, sample: dict, spot_id: int, data: dict | None = None
-    ):
-        if data is None:
-            response = self.__get(f"/spot/{project['id']}/{sample['id']}/{spot_id}")
-        else:
-            response = self.__put(
-                f"/spot/{project['id']}/{sample['id']}/{spot_id}", data
-            )
+        response = self.__post(f"/spot/{self.project['id']}/{self.sample['id']}", data)
         if response.ok:
             return response.json()
         else:
@@ -208,8 +200,6 @@ class PetroDB:
 
     def create_spots(
         self,
-        project: dict,
-        sample: dict,
         df: pd.DataFrame,
         label_col: str | None = None,
         mineral_col: str | None = None,
@@ -235,59 +225,30 @@ class PetroDB:
                     "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
-        response = self.__post(f"/spots/{project['id']}/{sample['id']}", spots)
+        response = self.__post(
+            f"/spots/{self.project['id']}/{self.sample['id']}", spots
+        )
         if response.ok:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
 
-    # ---------- AREAS
-
-    def areas(self, project: dict, sample: dict = {}):
-        if not sample:
-            res = []
-            for sample in self.samples(project):
-                try:
-                    res.append(self.areas(project, sample))
-                except ValueError:
-                    pass
-            return pd.concat(res, axis=0)
-        response = self.__get(f"/areas/{project['id']}/{sample['id']}")
+    def areas(self):
+        response = self.__get(f"/areas/{self.project['id']}/{self.sample['id']}")
         if response.ok:
             r = response.json()
             res = pd.DataFrame(
                 [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
             )
             res["label"] = [row["label"] for row in r]
-            res["sample"] = sample["name"]
+            res["sample"] = self.sample["name"]
             return res
         else:
             raise ValueError(response.json()["detail"])
 
-    def create_area(self, project: dict, sample: dict, label: str, values: dict):
+    def create_area(self, label: str, values: dict):
         data = {"label": label, "values": values}
-        response = self.__post(f"/area/{project['id']}/{sample['id']}", data)
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    def delete_area(self, project: dict, sample: dict, area_id: int):
-        response = self.__delete(f"/area/{project['id']}/{sample['id']}/{area_id}")
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    def update_area(
-        self, project: dict, sample: dict, area_id: int, data: dict | None = None
-    ):
-        if data is None:
-            response = self.__get(f"/area/{project['id']}/{sample['id']}/{area_id}")
-        else:
-            response = self.__put(
-                f"/area/{project['id']}/{sample['id']}/{area_id}", data
-            )
+        response = self.__post(f"/area/{self.project['id']}/{self.sample['id']}", data)
         if response.ok:
             return response.json()
         else:
@@ -295,7 +256,6 @@ class PetroDB:
 
     def create_areas(
         self,
-        project: dict,
         sample: dict,
         df: pd.DataFrame,
         label_col: str | None = None,
@@ -315,69 +275,118 @@ class PetroDB:
                     "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
-        response = self.__post(f"/areas/{project['id']}/{sample['id']}", areas)
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    # ---------- PROFILES
-
-    def profiles(self, project: dict, sample: dict, **kwargs):
-        label = kwargs.get("label", None)
-        if label is not None:
-            response = self.__get(
-                f"/search/profile/{project['id']}/{sample['id']}/{label}"
-            )
-            if response.ok:
-                return response.json()
-            else:
-                raise ValueError(response.json()["detail"])
-        else:
-            response = self.__get(f"/profiles/{project['id']}/{sample['id']}")
-            if response.ok:
-                return response.json()
-            else:
-                raise ValueError(response.json()["detail"])
-
-    def create_profile(self, project: dict, sample: dict, label: str, mineral: str):
-        data = {"label": label, "mineral": mineral}
-        response = self.__post(f"/profile/{project['id']}/{sample['id']}", data)
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    def delete_profile(self, project: dict, sample: dict, profile_id: int):
-        response = self.__delete(
-            f"/profile/{project['id']}/{sample['id']}/{profile_id}"
+        response = self.__post(
+            f"/areas/{self.project['id']}/{self.sample['id']}", areas
         )
         if response.ok:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
 
-    def update_profile(
-        self, project: dict, sample: dict, profile_id: int, data: dict | None = None
-    ):
-        if data is None:
+    def profiles(self, **kwargs):
+        label = kwargs.get("label", None)
+        if label is not None:
             response = self.__get(
-                f"/profile/{project['id']}/{sample['id']}/{profile_id}"
+                f"/search/profile/{self.project['id']}/{self.sample['id']}/{label}"
             )
+            if response.ok:
+                return response.json()
+            else:
+                raise ValueError(response.json()["detail"])
         else:
-            response = self.__put(
-                f"/profile/{project['id']}/{sample['id']}/{profile_id}", data
-            )
+            response = self.__get(f"/profiles/{self.project['id']}/{self.sample['id']}")
+            if response.ok:
+                return response.json()
+            else:
+                raise ValueError(response.json()["detail"])
+
+    def create_profile(self, label: str, mineral: str):
+        data = {"label": label, "mineral": mineral}
+        response = self.__post(
+            f"/profile/{self.project['id']}/{self.sample['id']}", data
+        )
         if response.ok:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
 
-    # ---------- PROFILE SPOTS
+    def delete(self):
+        response = self.__delete(f"/sample/{self.project['id']}/{self.sample['id']}")
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
 
-    def profilespots(self, project: dict, sample: dict, profile: dict):
+    def update(self, data: dict):
+        response = self.__put(f"/sample/{self.project['id']}/{self.sample['id']}", data)
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+
+class PetroDBSpot(PetroDBSample):
+    """Petro DB spot instance"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.__kwargs["spot"] = self.spot = kwargs["spot"]
+
+    def delete(self):
+        response = self.__delete(
+            f"/spot/{self.project['id']}/{self.sample['id']}/{self.spot['id']}"
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def update(self, data: dict):
+        response = self.__put(
+            f"/spot/{self.project['id']}/{self.sample['id']}/{self.spot['id']}", data
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+
+class PetroDBArea(PetroDBSample):
+    """Petro DB area instance"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.__kwargs["area"] = self.area = kwargs["area"]
+
+    def delete(self):
+        response = self.__delete(
+            f"/area/{self.project['id']}/{self.sample['id']}/{self.artea['id']}"
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def update(self, data: dict):
+        response = self.__put(
+            f"/area/{self.project['id']}/{self.sample['id']}/{self.artea['id']}", data
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+
+class PetroDBProfile(PetroDBSample):
+    """Petro DB profile instance"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.__kwargs["profile"] = self.profile = kwargs["profile"]
+
+    def spots(self):
         response = self.__get(
-            f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}"
+            f"/profilespots/{self.project['id']}/{self.sample['id']}/{self.profile['id']}"
         )
         if response.ok:
             r = response.json()
@@ -385,59 +394,23 @@ class PetroDB:
                 [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
             )
             res["index"] = [row["index"] for row in r]
-            res["sample"] = sample["name"]
+            res["sample"] = self.sample["name"]
             return res
         else:
             raise ValueError(response.json()["detail"])
 
-    def create_profilespot(
-        self, project: dict, sample: dict, profile: dict, index: int, values: dict
-    ):
+    def create_spot(self, index: int, values: dict):
         data = {"index": index, "values": values}
         response = self.__post(
-            f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}", data
+            f"/profilespot/{self.project['id']}/{self.sample['id']}/{self.profile['id']}",
+            data,
         )
         if response.ok:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
 
-    def delete_profilespot(
-        self, project: dict, sample: dict, profile: dict, profilespot_id: int
-    ):
-        response = self.__delete(
-            f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}/{profilespot_id}"
-        )
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    def update_profilespot(
-        self,
-        project: dict,
-        sample: dict,
-        profile: dict,
-        profilespot_id: int,
-        data: dict | None = None,
-    ):
-        if data is None:
-            response = self.__get(
-                f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}/{profilespot_id}"
-            )
-        else:
-            response = self.__put(
-                f"/profilespot/{project['id']}/{sample['id']}/{profile['id']}/{profilespot_id}",
-                data,
-            )
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    def create_profilespots(
-        self, project: dict, sample: dict, profile: dict, df: pd.DataFrame
-    ):
+    def create_spots(self, df: pd.DataFrame):
         """Batch profilespots insert"""
         df = df.copy()
         profilespots = []
@@ -449,8 +422,59 @@ class PetroDB:
                 }
             )
         response = self.__post(
-            f"/profilespots/{project['id']}/{sample['id']}/{profile['id']}",
+            f"/profilespots/{self.project['id']}/{self.sample['id']}/{self.profile['id']}",
             profilespots,
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def delete(self):
+        response = self.__delete(
+            f"/profile/{self.project['id']}/{self.sample['id']}/{self.profile['id']}"
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def update(self, data: dict):
+        if data is None:
+            response = self.__get(
+                f"/profile/{self.project['id']}/{self.sample['id']}/{self.profile['id']}"
+            )
+        else:
+            response = self.__put(
+                f"/profile/{self.project['id']}/{self.sample['id']}/{self.profile['id']}",
+                data,
+            )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+
+class PetroDBProfileSpot(PetroDBProfile):
+    """Petro DB profile instance"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.__kwargs["profilespot"] = self.profilespot = kwargs["profilespot"]
+
+    def delete(self):
+        response = self.__delete(
+            f"/profilespot/{self.project['id']}/{self.sample['id']}/{self.profile['id']}/{self.profilespot['id']}"
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def update(self, data: dict):
+        response = self.__put(
+            f"/profilespot/{self.project['id']}/{self.sample['id']}/{self.profile['id']}/{self.profilespot['id']}",
+            data,
         )
         if response.ok:
             return response.json()
