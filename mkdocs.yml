@@ -13,6 +13,7 @@ nav:
   - Accessor: accessors.md
   - Plotting: plots.md
   - Minerals: minerals.md
+  - PetroDB: database.md
 
 plugins:
   - search

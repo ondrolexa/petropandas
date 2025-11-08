@@ -1,4 +1,18 @@
-"""Client for postresql petrodb database API."""
+"""Client for postresql petrodb database API
+
+This module provide easy CRUD operations on petrodb database
+
+Example:
+    >>> from petropandas import pd
+    >>> from petropandas.database import PetroDB
+    >>> db = PetroDB('http://127.0.0.1:8000', 'ondro', 'marketa25')
+    >>> project = db.projects(name="Zelena")
+    >>> sample = project.samples(name="SX273E")
+    >>> sample.spots.df(mineral="Grt")
+
+"""
+
+from functools import cached_property
 
 import pandas as pd
 import requests
@@ -60,7 +74,11 @@ class PetroAPI:
 
 
 class PetroDB:
-    """Petro DB database instance"""
+    """Petro database instance
+
+    High-level access to online Petro database
+
+    """
 
     def __init__(self, api_url, username, password):
         self.__db = PetroAPI(api_url, username, password)
@@ -69,6 +87,18 @@ class PetroDB:
         return f"PetroDB {'OK' if self.__db.logged else 'Not logged'}"
 
     def projects(self, **kwargs):
+        """Get project from database
+
+        Args:
+            name (str, optional): search for project by name
+
+        Returns:
+            Project instance or list of all projects if the name is not provided.
+
+        Raises:
+            ValueError: If project(s) was not found.
+
+        """
         name = kwargs.get("name", None)
         if name is not None:
             response = self.__db.get(f"/search/project/{name}")
@@ -89,6 +119,19 @@ class PetroDB:
                 raise ValueError(response.json()["detail"])
 
     def create_project(self, name: str, description: str = ""):
+        """Create project in database
+
+        Args:
+            name (str): name of the project
+            description (str, optional): decription of the project. Default ``.
+
+        Returns:
+            Created project instance.
+
+        Raises:
+            ValueError: If project was not created.
+
+        """
         data = {"name": name, "description": description}
         response = self.__db.post("/project/", data)
         if response.ok:
@@ -98,7 +141,12 @@ class PetroDB:
 
 
 class PetroDBProject:
-    """Petro DB project instance"""
+    """Petro DB project instance
+
+    Attributes:
+        data (dict): project attributes
+
+    """
 
     def __init__(self, db, project):
         self.__db = db
@@ -110,6 +158,7 @@ class PetroDBProject:
 
     @property
     def name(self):
+        """str: Name of the project."""
         return self.data["name"]
 
     @name.setter
@@ -118,6 +167,7 @@ class PetroDBProject:
 
     @property
     def description(self):
+        """str: Description of the project."""
         return self.data["description"]
 
     @description.setter
@@ -125,6 +175,18 @@ class PetroDBProject:
         self.data["description"] = desc
 
     def samples(self, **kwargs):
+        """Get sample from database
+
+        Args:
+            name (str, optional): search for sample by name
+
+        Returns:
+            Sample instance or list of all samples if the name is not provided.
+
+        Raises:
+            ValueError: If sample(s) was not found.
+
+        """
         name = kwargs.get("name", None)
         if name is not None:
             response = self.__db.get(f"/search/sample/{self.__project_id}/{name}")
@@ -145,6 +207,19 @@ class PetroDBProject:
                 raise ValueError(response.json()["detail"])
 
     def create_sample(self, name: str, description: str = ""):
+        """Create project in database
+
+        Args:
+            name (str): name of the sample
+            description (str, optional): decription of the sample. Default ``.
+
+        Returns:
+            Created sample instance.
+
+        Raises:
+            ValueError: If sample was not created.
+
+        """
         data = {"name": name, "description": description}
         response = self.__db.post(f"/sample/{self.__project_id}", data)
         if response.ok:
@@ -153,6 +228,7 @@ class PetroDBProject:
             raise ValueError(response.json()["detail"])
 
     def delete(self):
+        """Delete project from database. Use with caution!"""
         response = self.__db.delete(f"/project/{self.__project_id}")
         if response.ok:
             return response.json()
@@ -160,35 +236,77 @@ class PetroDBProject:
             raise ValueError(response.json()["detail"])
 
     def update(self):
+        """Update project in database according to the data attribute."""
         response = self.__db.put(f"/project/{self.__project_id}", self.data)
         if response.ok:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
 
-    def spots(self, **kwargs):
+    @property
+    def spots(self):
+        """Spots accessor"""
         res = []
+        names = []
         for sample in self.samples():
             try:
-                res.append(sample.spots(**kwargs))
+                res += list(sample.spots.records.values())
+                names += sample.spots.sample
             except ValueError:
                 pass
-        return pd.concat(res, axis=0).sort_index()
+        return PetroDBSpotRecords(res, sample=names)
 
-    def areas(
-        self,
-    ):
+    @property
+    def areas(self):
+        """Areas accessor"""
         res = []
+        names = []
         for sample in self.samples():
             try:
-                res.append(sample.areas())
+                res += list(sample.areas.records.values())
+                names += sample.areas.sample
             except ValueError:
                 pass
-        return pd.concat(res, axis=0).sort_index()
+        return PetroDBAreaRecords(res, sample=names)
+
+    def add_user(self, username: str):
+        """Add access to the project to user
+
+        Args:
+            username (str): username
+
+        """
+        response = self.__db.put(
+            f"/project/{self.__project_id}/adduser", {"username": username}
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
+
+    def remove_user(self, username: str):
+        """Remove access to the project for user
+
+        Args:
+            username (str): username
+
+        """
+        response = self.__db.put(
+            f"/project/{self.__project_id}/removeuser", {"username": username}
+        )
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(response.json()["detail"])
 
 
 class PetroDBSample:
-    """Petro DB sample instance"""
+    """Petro DB sample instance
+
+    Attributes:
+        data (dict): project attributes
+
+    """
 
     def __init__(self, db, project_id, sample):
         self.__db = db
@@ -201,6 +319,7 @@ class PetroDBSample:
 
     @property
     def name(self):
+        """str: Name of the sample."""
         return self.data["name"]
 
     @name.setter
@@ -209,32 +328,46 @@ class PetroDBSample:
 
     @property
     def description(self):
+        """str: Description of the sample."""
         return self.data["description"]
 
     @description.setter
     def description(self, desc: str):
         self.data["description"] = desc
 
-    def spot(self, *args):
-        if args:
-            response = self.__db.get(
-                f"/spot/{self.__project_id}/{self.__sample_id}/{args[0]}"
+    @cached_property
+    def spots(self):
+        """Spots accessor"""
+        response = self.__db.get(f"/spots/{self.__project_id}/{self.__sample_id}")
+        if response.ok:
+            return PetroDBSpotRecords(
+                response.json(), sample=len(response.json()) * [self.name]
             )
-            if response.ok:
-                return PetroDBSpot(
-                    self.__db, self.__project_id, self.__sample_id, spot=response.json()
-                )
-            else:
-                raise ValueError(response.json()["detail"])
         else:
-            response = self.__db.get(f"/spots/{self.__project_id}/{self.__sample_id}")
-            if response.ok:
-                return [
-                    PetroDBSpot(self.__db, self.__project_id, self.__sample_id, spot=s)
-                    for s in response.json()
-                ]
-            else:
-                raise ValueError(response.json()["detail"])
+            raise ValueError(response.json()["detail"])
+
+    def spot(self, spot_id: int):
+        """Get spot from database
+
+        Args:
+            id (int): id of the spot
+
+        Returns:
+            Spot instance.
+
+        Raises:
+            ValueError: If spot was not found.
+
+        """
+        response = self.__db.get(
+            f"/spot/{self.__project_id}/{self.__sample_id}/{spot_id}"
+        )
+        if response.ok:
+            return PetroDBSpot(
+                self.__db, self.__project_id, self.__sample_id, spot=response.json()
+            )
+        else:
+            raise ValueError(response.json()["detail"])
 
     def create_spot(
         self,
@@ -242,6 +375,20 @@ class PetroDBSample:
         mineral: str,
         values: dict,
     ):
+        """Create spot in database
+
+        Args:
+            label (str): label of the spot
+            mineral (str): Name of mineral. Kretz abbreviations recommended
+            values (dict): Data values
+
+        Returns:
+            Created spot instance.
+
+        Raises:
+            ValueError: If spot was not created.
+
+        """
         data = {"label": label, "mineral": mineral, "values": values}
         response = self.__db.post(f"/spot/{self.__project_id}/{self.__sample_id}", data)
         if response.ok:
@@ -257,7 +404,22 @@ class PetroDBSample:
         label_col: str | None = None,
         mineral_col: str | None = None,
     ):
-        """Batch spot insert"""
+        """Create spots in database from pandas dataframe
+
+        Args:
+            df (pandas.DataFrame): data values
+            label_col (str, optional): Name of column to be used as label. If not
+                provided, dataframe index is used
+            mineral_col (str, optional): Name of column to be used as mineral. If not
+                provided, mineral will be empty
+
+        Returns:
+            Created spots
+
+        Raises:
+            ValueError: If spots were not created.
+
+        """
         df = df.copy()
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
@@ -286,28 +448,54 @@ class PetroDBSample:
         else:
             raise ValueError(response.json()["detail"])
 
-    def area(self, *args):
-        if args:
-            response = self.__db.get(
-                f"/area/{self.__project_id}/{self.__sample_id}/{args[0]}"
+    @cached_property
+    def areas(self):
+        """Areas accessor"""
+        response = self.__db.get(f"/areas/{self.__project_id}/{self.__sample_id}")
+        if response.ok:
+            return PetroDBAreaRecords(
+                response.json(), sample=len(response.json()) * [self.name]
             )
-            if response.ok:
-                return PetroDBArea(
-                    self.__db, self.__project_id, self.__sample_id, area=response.json()
-                )
-            else:
-                raise ValueError(response.json()["detail"])
         else:
-            response = self.__db.get(f"/areas/{self.__project_id}/{self.__sample_id}")
-            if response.ok:
-                return [
-                    PetroDBArea(self.__db, self.__project_id, self.__sample_id, area=a)
-                    for a in response.json()
-                ]
-            else:
-                raise ValueError(response.json()["detail"])
+            raise ValueError(response.json()["detail"])
+
+    def area(self, area_id: int):
+        """Get area from database
+
+        Args:
+            id (int): id of the spot
+
+        Returns:
+            Area instance.
+
+        Raises:
+            ValueError: If area was not found.
+
+        """
+        response = self.__db.get(
+            f"/area/{self.__project_id}/{self.__sample_id}/{area_id}"
+        )
+        if response.ok:
+            return PetroDBArea(
+                self.__db, self.__project_id, self.__sample_id, area=response.json()
+            )
+        else:
+            raise ValueError(response.json()["detail"])
 
     def create_area(self, label: str, values: dict):
+        """Create area in database
+
+        Args:
+            label (str): label of the area
+            values (dict): Data values
+
+        Returns:
+            Created area instance.
+
+        Raises:
+            ValueError: If area was not created.
+
+        """
         data = {"label": label, "values": values}
         response = self.__db.post(f"/area/{self.__project_id}/{self.__sample_id}", data)
         if response.ok:
@@ -322,7 +510,20 @@ class PetroDBSample:
         df: pd.DataFrame,
         label_col: str | None = None,
     ):
-        """Batch area insert"""
+        """Create areas in database from pandas dataframe
+
+        Args:
+            df (pandas.DataFrame): data values
+            label_col (str, optional): Name of column to be used as label. If not
+                provided, dataframe index is used
+
+        Returns:
+            Created areas
+
+        Raises:
+            ValueError: If areas were not created.
+
+        """
         df = df.copy()
         if label_col is None:
             labels = pd.Series(df.index.astype(str), index=df.index)
@@ -346,6 +547,18 @@ class PetroDBSample:
             raise ValueError(response.json()["detail"])
 
     def profiles(self, **kwargs):
+        """Get profile from database
+
+        Args:
+            label (str, optional): search for sample by name
+
+        Returns:
+            Profile instance or list of all profiles if the label is not provided.
+
+        Raises:
+            ValueError: If profile(s) was not found.
+
+        """
         label = kwargs.get("label", None)
         if label is not None:
             response = self.__db.get(
@@ -380,6 +593,19 @@ class PetroDBSample:
                 raise ValueError(response.json()["detail"])
 
     def create_profile(self, label: str, mineral: str):
+        """Create profile in database
+
+        Args:
+            label (str): label of the profile
+            mineral (str): Name of mineral. Kretz abbreviations recommended
+
+        Returns:
+            Created profile instance.
+
+        Raises:
+            ValueError: If profile was not created.
+
+        """
         data = {"label": label, "mineral": mineral}
         response = self.__db.post(
             f"/profile/{self.__project_id}/{self.__sample_id}", data
@@ -396,6 +622,7 @@ class PetroDBSample:
             raise ValueError(response.json()["detail"])
 
     def delete(self):
+        """Delete sample from database. Use with caution!"""
         response = self.__db.delete(f"/sample/{self.__project_id}/{self.__sample_id}")
         if response.ok:
             return response.json()
@@ -403,6 +630,7 @@ class PetroDBSample:
             raise ValueError(response.json()["detail"])
 
     def update(self):
+        """Update sample in database according to the data attribute."""
         response = self.__db.put(
             f"/sample/{self.__project_id}/{self.__sample_id}", self.data
         )
@@ -411,43 +639,26 @@ class PetroDBSample:
         else:
             raise ValueError(response.json()["detail"])
 
-    def spots(self, **kwargs):
-        mineral = kwargs.get("mineral", None)
-        if mineral is not None:
-            response = self.__db.get(
-                f"/search/spots/{self.__project_id}/{self.__sample_id}/{mineral}"
-            )
-        else:
-            response = self.__db.get(f"/spots/{self.__project_id}/{self.__sample_id}")
-        if response.ok:
-            r = response.json()
-            res = pd.DataFrame(
-                [row["values"] for row in r],
-                index=pd.Index([row["id"] for row in r]),
-            )
-            res["sample"] = self.name
-            res["label"] = [row["label"] for row in r]
-            res["mineral"] = [row["mineral"] for row in r]
-            return res.sort_index()
-        else:
-            raise ValueError(response.json()["detail"])
-
-    def areas(self):
-        response = self.__db.get(f"/areas/{self.__project_id}/{self.__sample_id}")
-        if response.ok:
-            r = response.json()
-            res = pd.DataFrame(
-                [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
-            )
-            res["label"] = [row["label"] for row in r]
-            res["sample"] = self.name
-            return res.sort_index()
-        else:
-            raise ValueError(response.json()["detail"])
+    @property
+    def profilespots(self):
+        res = []
+        names = []
+        for profile in self.profiles():
+            try:
+                res += list(profile.spots.records.values())
+                names += profile.spots.sample
+            except ValueError:
+                pass
+        return PetroDBProfilespotRecords(res, sample=names)
 
 
 class PetroDBSpot:
-    """Petro DB spot instance"""
+    """Petro DB spot instance
+
+    Attributes:
+        data (dict): project attributes
+
+    """
 
     def __init__(self, db, project_id, sample_id, spot):
         self.__db = db
@@ -461,6 +672,7 @@ class PetroDBSpot:
 
     @property
     def label(self):
+        """str: Label of the spot."""
         return self.data["label"]
 
     @label.setter
@@ -469,6 +681,7 @@ class PetroDBSpot:
 
     @property
     def mineral(self):
+        """str: Mineral of the spot."""
         return self.data["mineral"]
 
     @mineral.setter
@@ -476,6 +689,7 @@ class PetroDBSpot:
         self.data["mineral"] = m
 
     def delete(self):
+        """Delete spot from database. Use with caution!"""
         response = self.__db.delete(
             f"/spot/{self.__project_id}/{self.__sample_id}/{self.__spot_id}"
         )
@@ -485,6 +699,7 @@ class PetroDBSpot:
             raise ValueError(response.json()["detail"])
 
     def update(self):
+        """Update spot in database according to the data attribute."""
         response = self.__db.put(
             f"/spot/{self.__project_id}/{self.__sample_id}/{self.__spot_id}",
             self.data,
@@ -496,7 +711,12 @@ class PetroDBSpot:
 
 
 class PetroDBArea:
-    """Petro DB area instance"""
+    """Petro DB area instance
+
+    Attributes:
+        data (dict): project attributes
+
+    """
 
     def __init__(self, db, project_id, sample_id, area):
         self.__db = db
@@ -510,6 +730,7 @@ class PetroDBArea:
 
     @property
     def label(self):
+        """str: Label of the area."""
         return self.data["label"]
 
     @label.setter
@@ -517,6 +738,7 @@ class PetroDBArea:
         self.data["label"] = lbl
 
     def delete(self):
+        """Delete area from database. Use with caution!"""
         response = self.__db.delete(
             f"/area/{self.__project_id}/{self.__sample_id}/{self.__area_id}"
         )
@@ -526,6 +748,7 @@ class PetroDBArea:
             raise ValueError(response.json()["detail"])
 
     def update(self):
+        """Update area in database according to the data attribute."""
         response = self.__db.put(
             f"/area/{self.__project_id}/{self.__sample_id}/{self.__area_id}",
             self.data,
@@ -537,7 +760,13 @@ class PetroDBArea:
 
 
 class PetroDBProfile:
-    """Petro DB profile instance"""
+    """Petro DB sample instance
+
+    Attributes:
+        data (dict): project attributes
+        samplename (str): name of the sample
+
+    """
 
     def __init__(self, db, project_id, sample_id, samplename, profile):
         self.__db = db
@@ -552,6 +781,7 @@ class PetroDBProfile:
 
     @property
     def label(self):
+        """str: Label of the profile."""
         return self.data["label"]
 
     @label.setter
@@ -560,33 +790,62 @@ class PetroDBProfile:
 
     @property
     def mineral(self):
+        """str: Mineral of the profile."""
         return self.data["mineral"]
 
     @mineral.setter
     def mineral(self, m: str):
         self.data["mineral"] = m
 
-    def spot(self, *args):
-        if args:
-            response = self.__db.get(
-                f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}/{args[0]}"
-            )
-            if response.ok:
-                return PetroDBProfileSpot(spot=response.json(), **self._kwargs)
-            else:
-                raise ValueError(response.json()["detail"])
+    @cached_property
+    def spots(self):
+        """Profile spots accessor"""
+        response = self.__db.get(
+            f"/profilespots/{self.__project_id}/{self.__sample_id}/{self.__profile_id}"
+        )
+        if response.ok:
+            recs = response.json()
+            for rec in recs:
+                rec["label"] = self.label
+            return PetroDBSpotRecords(recs, sample=len(recs) * [self.samplename])
         else:
-            response = self.__db.get(
-                f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}"
-            )
-            if response.ok:
-                return [
-                    PetroDBProfileSpot(spot=s, **self._kwargs) for s in response.json()
-                ]
-            else:
-                raise ValueError(response.json()["detail"])
+            raise ValueError(response.json()["detail"])
+
+    def spot(self, spot_id: int):
+        """Get profile spot from database
+
+        Args:
+            id (int): id of the profile spot
+
+        Returns:
+            Profile spot instance.
+
+        Raises:
+            ValueError: If profile spot was not found.
+
+        """
+        response = self.__db.get(
+            f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}/{spot_id}"
+        )
+        if response.ok:
+            return PetroDBProfileSpot(spot=response.json(), **self._kwargs)
+        else:
+            raise ValueError(response.json()["detail"])
 
     def create_spot(self, index: int, values: dict):
+        """Create profile spot in database
+
+        Args:
+            index (int): used to define order of spots on profile
+            values (dict): Data values
+
+        Returns:
+            Created profile spot instance.
+
+        Raises:
+            ValueError: If profile spot was not created.
+
+        """
         data = {"index": index, "values": values}
         response = self.__db.post(
             f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}",
@@ -598,7 +857,18 @@ class PetroDBProfile:
             raise ValueError(response.json()["detail"])
 
     def create_spots(self, df: pd.DataFrame):
-        """Batch profilespots insert"""
+        """Create profile spots in database from pandas dataframe
+
+        Args:
+            df (pandas.DataFrame): data values, index must be numeric and is used to define order
+
+        Returns:
+            Created profile spots
+
+        Raises:
+            ValueError: If profile spots were not created.
+
+        """
         df = df.copy()
         profilespots = []
         for index, row in df.iterrows():
@@ -618,6 +888,7 @@ class PetroDBProfile:
             raise ValueError(response.json()["detail"])
 
     def delete(self):
+        """Delete profile from database. Use with caution!"""
         response = self.__db.delete(
             f"/profile/{self.__project_id}/{self.__sample_id}/{self.__profile_id}"
         )
@@ -627,6 +898,7 @@ class PetroDBProfile:
             raise ValueError(response.json()["detail"])
 
     def update(self):
+        """Update profile in database according to the data attribute."""
         response = self.__db.put(
             f"/profile/{self.__project_id}/{self.__sample_id}/{self.__profile_id}",
             self.data,
@@ -636,24 +908,14 @@ class PetroDBProfile:
         else:
             raise ValueError(response.json()["detail"])
 
-    def spots(self):
-        response = self.__db.get(
-            f"/profilespots/{self.__project_id}/{self.__sample_id}/{self.__profile_id}"
-        )
-        if response.ok:
-            r = response.json()
-            res = pd.DataFrame(
-                [row["values"] for row in r], index=pd.Index([row["id"] for row in r])
-            )
-            res["index"] = [row["index"] for row in r]
-            res["sample"] = self.samplename
-            return res.sort_index()
-        else:
-            raise ValueError(response.json()["detail"])
-
 
 class PetroDBProfileSpot:
-    """Petro DB profile instance"""
+    """Petro DB profile spot instance
+
+    Attributes:
+        data (dict): project attributes
+
+    """
 
     def __init__(self, db, project_id, sample_id, profile_id, spot):
         self.__db = db
@@ -668,13 +930,15 @@ class PetroDBProfileSpot:
 
     @property
     def index(self):
+        """int: Index of the profile spot."""
         return self.data["index"]
 
     @index.setter
-    def label(self, idx: int):
+    def index(self, idx: int):
         self.data["index"] = idx
 
     def delete(self):
+        """Delete profile spot from database. Use with caution!"""
         response = self.__db.delete(
             f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}/{self.__profilespot_id}"
         )
@@ -684,6 +948,7 @@ class PetroDBProfileSpot:
             raise ValueError(response.json()["detail"])
 
     def update(self):
+        """Update profile spot in database according to the data attribute."""
         response = self.__db.put(
             f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}/{self.__profilespot_id}",
             self.data,
@@ -692,6 +957,57 @@ class PetroDBProfileSpot:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
+
+
+class PetroDBRecords:
+    """Petro DB records accessor"""
+
+    def __init__(self, recs: list, sample: list):
+        self.records = {rec["id"]: rec for rec in recs}
+        self.sample = sample
+        self.cols = []
+
+    def __repr__(self):
+        return f"{len(self.records)} spots"
+
+    def df(self, **kwargs):
+        """Get records as pandas dataframe
+
+        Note: Keyword arguments `col=val` are used to select records with given value.
+            `col` must be on of the available columns in attribute cols.
+
+        Attributes:
+            cols (list): list of attributes for selection
+
+        """
+        res = pd.DataFrame(
+            [row["values"] for row in self.records.values()], index=self.records.keys()
+        )
+        res["sample"] = self.sample
+        for col in self.cols:
+            res[col] = [row[col] for row in self.records.values()]
+        for col, val in kwargs.items():
+            if col in self.cols:
+                res = res[res[col] == val]
+        return res.sort_index().copy()
+
+
+class PetroDBSpotRecords(PetroDBRecords):
+    def __init__(self, recs: list, sample: list):
+        super().__init__(recs, sample)
+        self.cols = ["label", "mineral"]
+
+
+class PetroDBAreaRecords(PetroDBRecords):
+    def __init__(self, recs: list, sample: list):
+        super().__init__(recs, sample)
+        self.cols = ["label"]
+
+
+class PetroDBProfilespotRecords(PetroDBRecords):
+    def __init__(self, recs: list, sample: list):
+        super().__init__(recs, sample)
+        self.cols = ["label"]
 
 
 class PetroDBAdmin:
@@ -710,6 +1026,14 @@ class PetroDBAdmin:
             raise ValueError(response.json()["detail"])
 
     def create_user(self, username: str, password: str, email: str):
+        """Create user in database
+
+        Args:
+            username (str): username
+            password (str): password
+            email (str): email
+
+        """
         data = {"username": username, "password": password, "email": email}
         response = self.__db.post("/user/", data)
         if response.ok:
