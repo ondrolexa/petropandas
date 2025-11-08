@@ -2,13 +2,15 @@
 
 This module provide easy CRUD operations on petrodb database
 
-Example:
-    >>> from petropandas import pd
-    >>> from petropandas.database import PetroDB
-    >>> db = PetroDB('http://127.0.0.1:8000', 'ondro', 'marketa25')
-    >>> project = db.projects(name="Zelena")
-    >>> sample = project.samples(name="SX273E")
-    >>> sample.spots.df(mineral="Grt")
+Usage examples:
+
+    from petropandas import pd
+    from petropandas.database import PetroDB
+
+    db = PetroDB('http://127.0.0.1:8000', 'user', 'password')
+    project = db.projects(name="MyProject")
+    sample = project.samples(name="DB250")
+    df = sample.spots.df(mineral="Grt")
 
 """
 
@@ -86,7 +88,7 @@ class PetroDB:
     def __repr__(self):
         return f"PetroDB {'OK' if self.__db.logged else 'Not logged'}"
 
-    def projects(self, **kwargs):
+    def projects(self, name: str | None = None):
         """Get project from database
 
         Args:
@@ -99,18 +101,12 @@ class PetroDB:
             ValueError: If project(s) was not found.
 
         """
-        name = kwargs.get("name", None)
         if name is not None:
             response = self.__db.get(f"/search/project/{name}")
             if response.ok:
                 return PetroDBProject(self.__db, project=response.json())
             else:
-                if kwargs.get("create", False):
-                    return self.create_project(
-                        name, description=kwargs.get("description", "")
-                    )
-                else:
-                    raise ValueError(response.json()["detail"])
+                raise ValueError(response.json()["detail"])
         else:
             response = self.__db.get("/projects/")
             if response.ok:
@@ -174,7 +170,7 @@ class PetroDBProject:
     def description(self, desc: str):
         self.data["description"] = desc
 
-    def samples(self, **kwargs):
+    def samples(self, name: str | None = None):
         """Get sample from database
 
         Args:
@@ -187,7 +183,6 @@ class PetroDBProject:
             ValueError: If sample(s) was not found.
 
         """
-        name = kwargs.get("name", None)
         if name is not None:
             response = self.__db.get(f"/search/sample/{self.__project_id}/{name}")
             if response.ok:
@@ -350,7 +345,7 @@ class PetroDBSample:
         """Get spot from database
 
         Args:
-            id (int): id of the spot
+            spot_id (int): id of the spot
 
         Returns:
             Spot instance.
@@ -463,7 +458,7 @@ class PetroDBSample:
         """Get area from database
 
         Args:
-            id (int): id of the spot
+            area_id (int): id of the spot
 
         Returns:
             Area instance.
@@ -546,7 +541,7 @@ class PetroDBSample:
         else:
             raise ValueError(response.json()["detail"])
 
-    def profiles(self, **kwargs):
+    def profiles(self, label: str | None = None):
         """Get profile from database
 
         Args:
@@ -559,7 +554,6 @@ class PetroDBSample:
             ValueError: If profile(s) was not found.
 
         """
-        label = kwargs.get("label", None)
         if label is not None:
             response = self.__db.get(
                 f"/search/profile/{self.__project_id}/{self.__sample_id}/{label}"
@@ -815,7 +809,7 @@ class PetroDBProfile:
         """Get profile spot from database
 
         Args:
-            id (int): id of the profile spot
+            spot_id (int): id of the profile spot
 
         Returns:
             Profile spot instance.
