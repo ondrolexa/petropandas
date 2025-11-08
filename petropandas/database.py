@@ -801,7 +801,7 @@ class PetroDBProfile:
             recs = response.json()
             for rec in recs:
                 rec["label"] = self.label
-            return PetroDBSpotRecords(recs, sample=len(recs) * [self.samplename])
+            return PetroDBProfilespotRecords(recs, sample=len(recs) * [self.samplename])
         else:
             raise ValueError(response.json()["detail"])
 

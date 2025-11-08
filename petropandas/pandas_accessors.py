@@ -29,18 +29,27 @@ config = {
     "agecols": AGECOLS,
     "isoplot_formats": ISOPLOT_FORMATS,
     "ree_plot": REE_PLOT,
+    "sort_oxides": False,
     "oxides_order": [
         "SiO2",
         "Al2O3",
         "FeO",
         "Fe2O3",
         "CaO",
-        "MgO",
         "Na2O",
+        "MgO",
         "K2O",
         "TiO2",
         "P2O5",
         "MnO",
+        "BaO",
+        "ZrO2",
+        "VO2",
+        "Cr2O3",
+        "ZnO",
+        "Y2O3",
+        "Sc2O3",
+        "PbO",
     ],
 }
 
@@ -213,7 +222,7 @@ class PetroPlotsAccessor:
     def __init__(self, pandas_obj):
         self._obj = pandas_obj
 
-    def garnet_profile(self, **kwargs):
+    def profile(self, **kwargs):
         """Plot garnet profiles.
 
         Note:
@@ -222,17 +231,11 @@ class PetroPlotsAccessor:
         Keyword Args:
             use_index (bool): When True, xticks are derived from DataFrame
                 index, otherwise ticks are sequential. Default False
-            twin (bool): When ``True``, the plot has two independent y-axes
-                for better scaling. Endmembers must be separated into two groups using
-                `cols` and `cols_extra` args. When ``False`` both groups are plotted on
-                same axes. Default ``True``
-            cols (list): list of endmember names in first group. Default
-                `["Alm"]`
-            cols_extra (list): list of endmember names in second group.
-                Default `["Prp", "Grs", "Sps"]`
-            lim (tuple): y-axis limits for first axis or auto when
+            extra (list): list of columns on secondary axis.
+                Default `[]`
+            lim (tuple): y-axis limits for principal axes or auto when
                 ``None``. Default ``None``
-            lim_extra (tuple): y-axis limits for second axis or auto when
+            lim_extra (tuple): y-axis limits for secondary axes or auto when
                 ``None``. Default ``None``
             percents (bool): When ``True`` y-axes scale is percents, otherwise fraction
             xlabel (str): label of the x-axis. Default auto.
@@ -249,9 +252,10 @@ class PetroPlotsAccessor:
                 Default 10
 
         """
-        cols = kwargs.get("cols", ["Alm"])
-        cols_extra = kwargs.get("cols_extra", ["Prp", "Sps", "Grs"])
-        twin = kwargs.get("twin", True)
+        em = self._obj.copy()
+
+        cols = em.columns.tolist()
+        extra = kwargs.get("extra", [])
         margin = kwargs.get("margin", 0.1)
         lim = kwargs.get("lim", None)
         lim_extra = kwargs.get("lim_extra", None)
@@ -263,7 +267,14 @@ class PetroPlotsAccessor:
         xticks_rotation = kwargs.get("xticks_rotation", 0)
         markers = kwargs.get("markers", None)
 
-        em = self._obj.copy()
+        # validate
+        cols_extra = []
+        for c in extra:
+            if c in cols:
+                cols.remove(c)
+                cols_extra.append(c)
+        twin = True if cols_extra else False
+
         colors = sns.color_palette(None, len(cols) + len(cols_extra))
         fig, ax1 = plt.subplots(**kwargs.get("subplot_kws", {}))
         if percents:
@@ -363,21 +374,20 @@ class PetroPlotsAccessor:
         else:
             plt.show()
 
-    def ternary(self, top, left, right, **kwargs):
+    def ternary(self, **kwargs):
         """Ternary scatter plot
 
-        Args:
-            top (str): Name of column for top variable
-            left (str): Name of column for left variable
-            right (str): Name of column for right variable
-
         Keyword Args:
-            kind (str): Kind of plot. One of `scatter`, `plot`
-                Deafult `scatter`
+            top (str): name of column for top variable. Default column 0
+            left (str): name of column for left variable. Default column 1
+            right (str): name of column for right variable. Default column 2
+            kind (str): kind of plot, `scatter`, `plot`. Other values
+                returns empty plot. Deafult `scatter`.
             ternary_sum (float): Total sum. Default 1.0
             tlim (tuple): top limits. Default(0, 1)
             llim (tuple): top limits. Default(0, 1)
             rlim (tuple): top limits. Default(0, 1)
+            grid (bool): show grid. Default False
             ax (Axes): matplotlib axes to be used.
             return_ax (bool): Whether to return matplotlib axes.
                 Default False
@@ -387,10 +397,14 @@ class PetroPlotsAccessor:
         function, e.g. `s` or `c` to `scatter` or `label`
 
         """
+        top = kwargs.pop("top", self._obj.columns[0])
+        left = kwargs.pop("left", self._obj.columns[1])
+        right = kwargs.pop("right", self._obj.columns[2])
         kind = kwargs.pop("kind", "scatter")
         ternary_sum = kwargs.pop("ternary_sum", 1.0)
         return_ax = kwargs.pop("return_ax", False)
         show = kwargs.pop("show", True)
+        grid = kwargs.pop("grid", False)
         if "ax" in kwargs:
             ax = kwargs.pop("ax")
         else:
@@ -435,6 +449,8 @@ class PetroPlotsAccessor:
             case "plot":
                 pc = ax.plot(top_vals, left_vals, right_vals, **kwargs)
 
+        if grid:
+            ax.grid()
         if return_ax:
             return ax
         if show:
@@ -657,11 +673,12 @@ class OxidesAccessor(AccessorTemplate):
         if not any(valid):
             raise MissingColumns("oxides")
         # sort names
-        for ox in config["oxides_order"]:
-            if ox in names:
-                ix = names.index(ox)
-                self._names.append(names.pop(ix))
-                self._names_props.append(props.pop(ix))
+        if config["sort_oxides"]:
+            for ox in config["oxides_order"]:
+                if ox in names:
+                    ix = names.index(ox)
+                    self._names.append(names.pop(ix))
+                    self._names_props.append(props.pop(ix))
         self._names.extend(names)
         self._names_props.extend(props)
 
@@ -840,24 +857,33 @@ class OxidesAccessor(AccessorTemplate):
             print("Both FeO and Fe2O3 not in data. Nothing changed.")
             return self._final(self._df, **kwargs)
 
-    def recalculate_Fe(self, noxy, ncat, **kwargs) -> pd.DataFrame:
+    def recalculate_Fe(self, **kwargs) -> pd.DataFrame:
         """Recalculate Fe based on charge balance.
 
         Note:
             Either both FeO and Fe2O3 are present or any of then, the composition
             is modified to fullfil charge balance for given cations and oxygens.
 
-        Args:
-            noxy (int): ideal number of oxygens. Default 1
-            ncat (int): ideal number of cations. Default 1
+            Number of cations and oxygens could be provided by ncat and noxy args
+            or by Mineral instance
 
         Keyword Args:
+            mineral (Mineral): noxy and ncat are taken from Mneral instance
+            noxy (int or Mineral): ideal number of oxygens. Default 1
+            ncat (int): ideal number of cations. Default 1
             keep (list): list of additional columns to be included. Default [].
 
         Returns:
             Dataframe with recalculated Fe
 
         """
+        if "mineral" in kwargs:
+            ncat = kwargs.get("mineral").ncat
+            noxy = kwargs.get("mineral").noxy
+        else:
+            ncat = kwargs.get("ncat", 1)
+            noxy = kwargs.get("noxy", 1)
+
         charge = self.cat_number().mul(self.cnf(ncat), axis=0)
         if ("Fe2O3" in self._names) & ("FeO" not in self._names):
             charge.loc[pd.isna(self._df["Fe2O3"]), "Fe2O3"] = 0
@@ -913,7 +939,7 @@ class OxidesAccessor(AccessorTemplate):
             if mineral.needsFe == "Fe2":
                 dt = self.convert_Fe(**kwargs)
             elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat, **kwargs)
+                dt = self.recalculate_Fe(mineral=mineral, **kwargs)
             else:
                 dt = self.df()
             cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
@@ -942,7 +968,7 @@ class OxidesAccessor(AccessorTemplate):
             if mineral.needsFe == "Fe2":
                 dt = self.convert_Fe(**kwargs)
             elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat, **kwargs)
+                dt = self.recalculate_Fe(mineral=mineral, **kwargs)
             else:
                 dt = self.df()
             cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
@@ -972,7 +998,7 @@ class OxidesAccessor(AccessorTemplate):
             if mineral.needsFe == "Fe2":
                 dt = self.convert_Fe(**kwargs)
             elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral.noxy, mineral.ncat, **kwargs)
+                dt = self.recalculate_Fe(mineral=mineral, **kwargs)
             else:
                 dt = self.df()
             cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
