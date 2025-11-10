@@ -404,6 +404,7 @@ class PetroPlotsAccessor:
         ternary_sum = kwargs.pop("ternary_sum", 1.0)
         return_ax = kwargs.pop("return_ax", False)
         show = kwargs.pop("show", True)
+        filename = kwargs.pop("filename", None)
         grid = kwargs.pop("grid", False)
         if "ax" in kwargs:
             ax = kwargs.pop("ax")
@@ -462,7 +463,12 @@ class PetroPlotsAccessor:
                     ax.add_artist(leg_color)
                 if leg_size:
                     ax.add_artist(leg_size)
-            plt.show()
+            if filename is not None:
+                ax.get_figure().savefig(filename)
+                print(f"{filename} saved.")
+                plt.close(ax.get_figure())
+            else:
+                plt.show()
 
 
 @pd.api.extensions.register_dataframe_accessor("isoplot")
