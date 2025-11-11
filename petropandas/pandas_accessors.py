@@ -596,13 +596,18 @@ class AccessorTemplate:
         #     rest = df.columns.symmetric_difference(select).difference(df.columns)
         #     df[rest] = np.nan
         keep = kwargs.get("keep", [])
+        dropna = kwargs.get("dropna", True)
         match keep:
             case []:
-                return df
+                pass
             case "all":
-                return pd.concat([df, self._obj[self._others]], axis=1)
+                df = pd.concat([df, self._obj[self._others]], axis=1)
             case _:
-                return pd.concat([df, self._obj[keep]], axis=1)
+                df = pd.concat([df, self._obj[keep]], axis=1)
+        if dropna:
+            return df.dropna(axis=1, how="all")
+        else:
+            return df
 
     @property
     def props(self) -> pd.DataFrame:
@@ -614,6 +619,7 @@ class AccessorTemplate:
 
         Keyword Args:
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe
@@ -621,7 +627,7 @@ class AccessorTemplate:
         return self._final(self._df, **kwargs)
 
     def dropna(self, **kwargs) -> pd.DataFrame:
-        """Drop columns with all NA values.
+        """Drop columns with NA values.
 
         Keyword Args:
             keep (list): list of additional columns to be included. Default [].
@@ -629,7 +635,7 @@ class AccessorTemplate:
         Returns:
             Dataframe without NA columns
         """
-        return self._final(self._df.dropna(axis=1, how="all"), **kwargs)
+        return self._final(self._df.dropna(axis=1), **kwargs)
 
     def mean(self) -> pd.DataFrame:
         """Return Dataframe with single row of arithmetic means of valid columns"""
@@ -645,6 +651,7 @@ class AccessorTemplate:
         Keyword Args:
             to (float): Sum of values. Default 100.0
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Scaled dataframe
@@ -652,6 +659,109 @@ class AccessorTemplate:
         to = kwargs.get("to", 100.0)
         res = to * self._df.div(self._df.sum(axis=1), axis=0)
         return self._final(res, **kwargs)
+
+    def plot(self, **kwargs):
+        """Paiplot of data.
+
+        Notes: All keywords except further listed are passed to seaborn pairplot.
+            Use all accessor valid columns or columns provided in `vars`
+
+        Keyword Args:
+            title (str): Title of the plot. Default None
+            filename (str): If not none, plot is saved to file. Default None.
+            dpi (int): DPI used for `savefig`. Default 150.
+        """
+        title = kwargs.pop("title", None)
+        filename = kwargs.pop("filename", None)
+        dpi = kwargs.pop("filename", 150)
+
+        if "vars" not in kwargs:
+            kwargs["vars"] = self._names
+            keep = []
+        else:
+            keep = [c for c in kwargs["vars"] if c not in self._names]
+
+        if "hue" in kwargs:
+            keep.append(kwargs["hue"])
+
+        g = sns.pairplot(self.df(keep=keep), **kwargs)
+        if title is not None:
+            g.fig.suptitle(title)
+        if filename is not None:
+            g.fig.savefig(filename, dpi=dpi)
+            plt.close(g.fig)
+        else:
+            plt.show()
+
+    def boxplot(self, **kwargs):
+        """Boxplot of data.
+
+        Notes: All keywords except further listed are passed to seaborn pairplot.
+            Use all accessor valid columns or columns provided in `vars`
+
+        Keyword Args:
+            title (str): Title of the plot. Default None
+            filename (str): If not none, plot is saved to file. Default None.
+            dpi (int): DPI used for `savefig`. Default 150.
+        """
+        title = kwargs.pop("title", None)
+        filename = kwargs.pop("filename", None)
+        dpi = kwargs.pop("filename", 150)
+        melt = {}
+
+        if "vars" not in kwargs:
+            melt["value_vars"] = None
+            keep = []
+        else:
+            melt["value_vars"] = kwargs.pop("vars")
+            keep = [c for c in melt["value_vars"] if c not in self._names]
+        if "hue" in kwargs:
+            hue = kwargs["hue"]
+            melt["id_vars"] = [hue]
+            keep.append(hue)
+
+        m = pd.melt(self.df(keep=keep), **melt)
+        g = sns.boxplot(m, x="variable", y="value", **kwargs)
+        if title is not None:
+            g.axes.title(title)
+        if filename is not None:
+            g.figure.savefig(filename, dpi=dpi)
+            plt.close(g.figure)
+        else:
+            plt.show()
+
+    def heatmap(self, **kwargs):
+        """Correlation heatmap of data.
+
+        Notes: All keywords except further listed are passed to seaborn pairplot.
+            Use all accessor valid columns or columns provided in `vars`
+
+        Keyword Args:
+            title (str): Title of the plot. Default None
+            filename (str): If not none, plot is saved to file. Default None.
+            dpi (int): DPI used for `savefig`. Default 150.
+        """
+        title = kwargs.pop("title", None)
+        filename = kwargs.pop("filename", None)
+        dpi = kwargs.pop("filename", 150)
+
+        if "vmin" not in kwargs:
+            kwargs["vmin"] = -1
+        if "vmax" not in kwargs:
+            kwargs["vmax"] = 1
+        if "cmap" not in kwargs:
+            kwargs["cmap"] = "RdBu"
+        if "annot" not in kwargs:
+            kwargs["annot"] = True
+
+        g = sns.heatmap(self._df.corr(), **kwargs)
+        if title is not None:
+            g.axes.title(title)
+        if filename is not None:
+            g.figure.savefig(filename, dpi=dpi)
+            plt.close(g.fig)
+        else:
+            plt.show()
 
 
 @pd.api.extensions.register_dataframe_accessor("oxides")
@@ -693,6 +803,7 @@ class OxidesAccessor(AccessorTemplate):
 
         Keyword Args:
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with molar proportions
@@ -706,6 +817,7 @@ class OxidesAccessor(AccessorTemplate):
 
         Keyword Args:
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with molar proportions
@@ -719,6 +831,7 @@ class OxidesAccessor(AccessorTemplate):
 
         Keyword Args:
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with molar proportions
@@ -768,11 +881,11 @@ class OxidesAccessor(AccessorTemplate):
         ncat = kwargs.get("ncat", 1)
         tocat = kwargs.get("tocat", False)
         if tocat:
-            df = self.cat_number().multiply(self.cnf(ncat), axis=0)
+            df = self.cat_number(dropna=False).multiply(self.cnf(ncat), axis=0)
             df.columns = [str(cat) for cat in self.props["cation"]]
             return self._final(df, **kwargs)
         else:
-            df = self.cat_number().multiply(self.onf(noxy), axis=0)
+            df = self.cat_number(dropna=False).multiply(self.onf(noxy), axis=0)
             df.columns = [str(cat) for cat in self.props["cation"]]
             return self._final(df, **kwargs)
 
@@ -784,12 +897,16 @@ class OxidesAccessor(AccessorTemplate):
 
         Keyword Args:
             keep (list): list of additional columns to be included.Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with charges
 
         """
-        charge = self.cat_number().mul(self.cnf(ncat), axis=0) * self.props["charge"]
+        charge = (
+            self.cat_number(dropna=False).mul(self.cnf(ncat), axis=0)
+            * self.props["charge"]
+        )
         return self._final(charge, **kwargs)
 
     def apatite_correction(self, **kwargs) -> pd.DataFrame:
@@ -802,6 +919,7 @@ class OxidesAccessor(AccessorTemplate):
 
         Keyword Args:
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Apatite corrected dataframe
@@ -829,6 +947,7 @@ class OxidesAccessor(AccessorTemplate):
         Keyword Args:
             to (str): to what iron oxide Fe should be converted. Default `"FeO"`
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with converted Fe oxide
@@ -878,6 +997,7 @@ class OxidesAccessor(AccessorTemplate):
             noxy (int or Mineral): ideal number of oxygens. Default 1
             ncat (int): ideal number of cations. Default 1
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with recalculated Fe
@@ -890,7 +1010,7 @@ class OxidesAccessor(AccessorTemplate):
             ncat = kwargs.get("ncat", 1)
             noxy = kwargs.get("noxy", 1)
 
-        charge = self.cat_number().mul(self.cnf(ncat), axis=0)
+        charge = self.cat_number(dropna=False).mul(self.cnf(ncat), axis=0)
         if ("Fe2O3" in self._names) & ("FeO" not in self._names):
             charge.loc[pd.isna(self._df["Fe2O3"]), "Fe2O3"] = 0
             chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
@@ -922,7 +1042,11 @@ class OxidesAccessor(AccessorTemplate):
             return self._final(self._df, **kwargs)
         res = self._df.copy()
         ncharge = charge / ncat
-        df = ncharge.mul(mws).mul(self.cat_number().sum(axis=1), axis="rows").div(ncats)
+        df = (
+            ncharge.mul(mws)
+            .mul(self.cat_number(dropna=False).sum(axis=1), axis="rows")
+            .div(ncats)
+        )
         res[df.columns] = df
         return self._final(res, **kwargs)
 
@@ -935,6 +1059,7 @@ class OxidesAccessor(AccessorTemplate):
         Keyword Args:
             force (bool): when True, remaining cations are added to last site
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with apfu for given mineral
@@ -994,6 +1119,7 @@ class OxidesAccessor(AccessorTemplate):
         Keyword Args:
             force (bool): when True, remaining cations are added to last site
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with calculated endmembers
@@ -1213,7 +1339,7 @@ class IonsAccessor(AccessorTemplate):
             raise MissingColumns("ions")
 
     def wt(self):
-        """Oxides weight pervents calculated from ions.
+        """Oxides weight percents calculated from ions.
 
         Returns:
             Dataframe with calculated oxides weight percents
@@ -1287,6 +1413,7 @@ class REEAccessor(AccessorTemplate):
             reference (str): Reference. Default "McDonough & Sun 1995"
             source (str): Original source. Deafult same as reference.
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
             Dataframe with normalized REE composition
@@ -1321,6 +1448,7 @@ class REEAccessor(AccessorTemplate):
             filename (str): If not none, plot is saved to file. Default None.
             dpi (int): DPI used for `savefig`. Default 150.
             keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
         """
         fig, ax = plt.subplots()
         ndf = self.normalize(**kwargs)
