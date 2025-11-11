@@ -633,6 +633,13 @@ class PetroDBSample:
         else:
             raise ValueError(response.json()["detail"])
 
+    def reset(self):
+        """Reset cached properties spots and areas to access updated data"""
+        if "spots" in self.__dict__:
+            self.__dict__["spots"]
+        if "areas" in self.__dict__:
+            self.__dict__["areas"]
+
     @property
     def profilespots(self):
         res = []
@@ -901,6 +908,11 @@ class PetroDBProfile:
             return response.json()
         else:
             raise ValueError(response.json()["detail"])
+
+    def reset(self):
+        """Reset cached property spots to access updated data"""
+        if "spots" in self.__dict__:
+            self.__dict__["spots"]
 
 
 class PetroDBProfileSpot:
