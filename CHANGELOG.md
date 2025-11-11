@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Client for postresql petrodb database API
+- accessors plotting methods plot, heatmap and boxplot Added
+- drop columns with only NA by default
 
 ### Fixed
 
