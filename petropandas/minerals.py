@@ -358,7 +358,7 @@ class Feldspar(Mineral):
 
 
 class Pyroxene_Fe2(Mineral):
-    """Pyroxen using total Fe with 3 endmembers"""
+    """Simple Pyroxene using total Fe with 3 endmembers"""
 
     def __init__(self):
         super().__init__()
@@ -382,7 +382,7 @@ class Pyroxene_Fe2(Mineral):
 
 
 class Pyroxene(Mineral):
-    """Pyroxene with Na-Cr with 6 endmembers"""
+    """Pyroxene"""
 
     def __init__(self):
         super().__init__()
@@ -398,29 +398,33 @@ class Pyroxene(Mineral):
 
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)
-        A = np.array(
-            [
-                apfu["Ca{2+}"],
-                apfu["Al{3+}"],
-                apfu["Fe{3+}"],
-                apfu["Mg{2+}"],
-                apfu["Fe{2+}"],
-                apfu["Cr{3+}"],
-            ]
-        )
-        M = np.array(
-            [
-                [0, 0, 0, 2, 0, 0],
-                [2, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 2, 0],
-                [0, 1, 0, 0, 0, 0],
-                [0, 0, 1, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1],
-            ]
-        )
-        em = A @ np.linalg.inv(M)
-        em = em / em.sum()
-        return pd.Series(em, index=["En", "Wo", "Fs", "Jd", "Aeg", "Kos"])
+        acm = min(apfu["Na{+}"] + apfu["K{+}"], apfu["Fe{3+}"])
+        nar = apfu["Na{+}"] + apfu["K{+}"] - acm
+        al4 = np.clip(2 - apfu["Si{4+}"], 0, apfu["Al{3+}"])
+        al6 = apfu["Al{3+}"] - al4
+        jad = min(al6, nar)
+        cati = min(apfu["Ti{4+}"], al4 / 2)
+        al4r = al4 - 2 * cati
+        al6r = al6 - 2 * cati
+        cacr = min(apfu["Cr{3+}"], al4r)
+        fe3r = apfu["Fe{3+}"] - acm
+        cafe = min(al4r, fe3r)
+        cats = min(al4r, al6r)
+        car = apfu["Ca{2+}"] - (cati + cacr + cafe + cats)
+        em = {
+            "Aeg": acm,
+            "Jd": jad,
+            "CaTi": cati,
+            "CaCr": cacr,
+            "Hd": cafe,
+            "CaTs": cats,
+            "Esc": 0.5 * car if al6r > (2 * car) else al6r,
+            "En": apfu["Mg{2+}"] / 2,
+            "Fs": apfu["Fe{2+}"] / 2,
+            "CaMn": apfu["Mn{2+}"] / 2,
+            "Wo": car / 2 if car > 0 else 0,
+        }
+        return pd.Series(em)
 
 
 class DiMica(Mineral):

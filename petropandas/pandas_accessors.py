@@ -840,10 +840,27 @@ class OxidesAccessor(AccessorTemplate):
         res = self.props["noxy"] * self._df.div(self.props["mass"])
         return self._final(res, **kwargs)
 
-    def onf(self, noxy) -> pd.Series:
-        """Oxygen normalisation factor - ideal oxygens / sum of oxygens
+    def omega(self, **kwargs) -> float:
+        """Oxygen to positive atomic charges ratio
 
         Args:
+            mineral (Mineral): noxy and ncat are taken from Mneral instance
+            noxy (int): ideal number of oxygens. Default 1
+            ncat (int): ideal number of cations. Default 1
+        """
+        if "mineral" in kwargs:
+            ncat = kwargs.get("mineral").ncat
+            noxy = kwargs.get("mineral").noxy
+        else:
+            ncat = kwargs.get("ncat", 1)
+            noxy = kwargs.get("noxy", 1)
+
+        return 2 * noxy / (self.charges(ncat).div(self.cnf(ncat), axis=0)).sum(axis=1)
+
+    def onf(self, noxy: int) -> pd.Series:
+        """Oxygen normalisation factor - ideal oxygens / sum of oxygens
+
+        Keyword Args:
             noxy (int): ideal oxygens
 
         Returns:
@@ -852,7 +869,7 @@ class OxidesAccessor(AccessorTemplate):
         """
         return noxy / self.oxy_number().sum(axis=1)
 
-    def cnf(self, ncat) -> pd.Series:
+    def cnf(self, ncat: int) -> pd.Series:
         """Cation normalisation factor - ideal cations / sum of cations
 
         Args:
@@ -889,7 +906,7 @@ class OxidesAccessor(AccessorTemplate):
             df.columns = [str(cat) for cat in self.props["cation"]]
             return self._final(df, **kwargs)
 
-    def charges(self, ncat, **kwargs) -> pd.DataFrame:
+    def charges(self, ncat: int, **kwargs) -> pd.DataFrame:
         """Calculates charges based on number of cations.
 
         Args:
@@ -908,6 +925,30 @@ class OxidesAccessor(AccessorTemplate):
             * self.props["charge"]
         )
         return self._final(charge, **kwargs)
+
+    def charge_def(self, **kwargs) -> pd.Series:
+        """Calculates charge deficiency based on number of oxygens and cations.
+
+        Keyword Args:
+            mineral (Mineral): noxy and ncat are taken from Mneral instance
+            noxy (int): ideal number of oxygens. Default 1
+            ncat (int): ideal number of cations. Default 1
+
+        Returns:
+            pandas.Series: Charge deficiency
+
+        """
+        if "mineral" in kwargs:
+            ncat = kwargs.get("mineral").ncat
+            noxy = kwargs.get("mineral").noxy
+        else:
+            ncat = kwargs.get("ncat", 1)
+            noxy = kwargs.get("noxy", 1)
+        charge = (
+            self.cat_number(dropna=False).mul(self.cnf(ncat), axis=0)
+            * self.props["charge"]
+        )
+        return 2 * noxy - charge.sum(axis=1)
 
     def apatite_correction(self, **kwargs) -> pd.DataFrame:
         """Apatite correction
@@ -994,7 +1035,7 @@ class OxidesAccessor(AccessorTemplate):
 
         Keyword Args:
             mineral (Mineral): noxy and ncat are taken from Mneral instance
-            noxy (int or Mineral): ideal number of oxygens. Default 1
+            noxy (int): ideal number of oxygens. Default 1
             ncat (int): ideal number of cations. Default 1
             keep (list): list of additional columns to be included. Default [].
             dropna (bool): whether to drop columns with NA only. Default True
@@ -1117,6 +1158,8 @@ class OxidesAccessor(AccessorTemplate):
             mineral: Mineral instance (see `petropandas.minerals`)
 
         Keyword Args:
+            tocat (bool): when ``True`` normalize to cations, otherwise to oxygens.
+                Default ``False``
             force (bool): when True, remaining cations are added to last site
             keep (list): list of additional columns to be included. Default [].
             dropna (bool): whether to drop columns with NA only. Default True
@@ -1125,6 +1168,8 @@ class OxidesAccessor(AccessorTemplate):
             Dataframe with calculated endmembers
 
         """
+        if "tocat" not in kwargs:
+            kwargs["tocat"] = True
         force = kwargs.get("force", False)
         if mineral.has_endmembers:
             if mineral.needsFe == "Fe2":
@@ -1338,7 +1383,7 @@ class IonsAccessor(AccessorTemplate):
         if not any(valid):
             raise MissingColumns("ions")
 
-    def wt(self):
+    def wt(self, omega: float = 1) -> pd.DataFrame:
         """Oxides weight percents calculated from ions.
 
         Returns:
@@ -1350,8 +1395,8 @@ class IonsAccessor(AccessorTemplate):
             ion = next(iter(formula(col).atoms.keys()))
             m, n = ionox[ion.charge]
             ox = formula(f"{ion.element.symbol}{m}O{n}")
-            df[str(ox)] = self._obj[col] * ox.mass / ox.structure[0][0]
-        return 100 * df.div(df.sum(axis=1), axis=0)
+            df[str(ox)] = self._obj[col] * ox.mass / (omega * ox.structure[0][0])
+        return df
 
 
 @pd.api.extensions.register_dataframe_accessor("elements")
