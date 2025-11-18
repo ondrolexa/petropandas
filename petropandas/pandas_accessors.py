@@ -812,6 +812,20 @@ class OxidesAccessor(AccessorTemplate):
         res = self._df.div(self.props["mass"])
         return self._final(res, **kwargs)
 
+    def oxwt(self, **kwargs) -> pd.DataFrame:
+        """Convert molar proportions to oxides weight percents.
+
+        Keyword Args:
+            keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
+
+        Returns:
+            Dataframe with oxides weight percents
+
+        """
+        res = self._df.mul(self.props["mass"])
+        return self._final(res, **kwargs)
+
     def cat_number(self, **kwargs) -> pd.DataFrame:
         """Calculate cations number.
 
@@ -820,7 +834,7 @@ class OxidesAccessor(AccessorTemplate):
             dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
-            Dataframe with molar proportions
+            Dataframe with cations numbers
 
         """
         res = self.props["ncat"] * self._df.div(self.props["mass"])
@@ -834,7 +848,7 @@ class OxidesAccessor(AccessorTemplate):
             dropna (bool): whether to drop columns with NA only. Default True
 
         Returns:
-            Dataframe with molar proportions
+            Dataframe with oxygens numbers
 
         """
         res = self.props["noxy"] * self._df.div(self.props["mass"])
