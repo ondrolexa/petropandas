@@ -637,6 +637,20 @@ class AccessorTemplate:
         """
         return self._final(self._df.dropna(axis=1), **kwargs)
 
+    def molprop(self, **kwargs) -> pd.DataFrame:
+        """Convert oxides weight percents to molar proportions.
+
+        Keyword Args:
+            keep (list): list of additional columns to be included. Default [].
+            dropna (bool): whether to drop columns with NA only. Default True
+
+        Returns:
+            Dataframe with molar proportions
+
+        """
+        res = self._df.div(self.props["mass"])
+        return self._final(res, **kwargs)
+
     def mean(self) -> pd.DataFrame:
         """Return Dataframe with single row of arithmetic means of valid columns"""
         return (self._df.sum(axis=0) / len(self._df)).to_frame().T
@@ -797,20 +811,6 @@ class OxidesAccessor(AccessorTemplate):
                     self._names_props.append(props.pop(ix))
         self._names.extend(names)
         self._names_props.extend(props)
-
-    def molprop(self, **kwargs) -> pd.DataFrame:
-        """Convert oxides weight percents to molar proportions.
-
-        Keyword Args:
-            keep (list): list of additional columns to be included. Default [].
-            dropna (bool): whether to drop columns with NA only. Default True
-
-        Returns:
-            Dataframe with molar proportions
-
-        """
-        res = self._df.div(self.props["mass"])
-        return self._final(res, **kwargs)
 
     def oxwt(self, **kwargs) -> pd.DataFrame:
         """Convert molar proportions to oxides weight percents.
