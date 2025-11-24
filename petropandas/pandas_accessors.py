@@ -381,8 +381,8 @@ class PetroPlotsAccessor:
             top (str): name of column for top variable. Default column 0
             left (str): name of column for left variable. Default column 1
             right (str): name of column for right variable. Default column 2
-            kind (str): kind of plot, `scatter`, `plot`. Other values
-                returns empty plot. Deafult `scatter`.
+            kind (str): kind of plot, `scatter`, `plot` or `contour`. Other
+                values returns empty plot. Deafult `scatter`.
             ternary_sum (float): Total sum. Default 1.0
             tlim (tuple): top limits. Default(0, 1)
             llim (tuple): top limits. Default(0, 1)
@@ -411,9 +411,9 @@ class PetroPlotsAccessor:
         else:
             fig = plt.figure()
             ax = fig.add_subplot(projection="ternary", ternary_sum=ternary_sum)
-        ax.set_tlim(*kwargs.pop("tlim", (0, 1)))
-        ax.set_llim(*kwargs.pop("llim", (0, 1)))
-        ax.set_rlim(*kwargs.pop("rlim", (0, 1)))
+        ax.set_tlim(*kwargs.pop("tlim", (0, ternary_sum)))
+        ax.set_llim(*kwargs.pop("llim", (0, ternary_sum)))
+        ax.set_rlim(*kwargs.pop("rlim", (0, ternary_sum)))
         ax.set_tlabel(top)
         ax.set_llabel(left)
         ax.set_rlabel(right)
@@ -422,34 +422,43 @@ class PetroPlotsAccessor:
         right_vals = self._obj[right]
         leg_color = False
         leg_size = False
-        tit_color = None
-        tit_size = None
+        tit_leg = None
         match kind:
             case "scatter":
                 if "s" in kwargs:
                     if isinstance(kwargs["s"], str):
-                        tit_size = kwargs["s"]
+                        tit_leg = kwargs["s"]
                         kwargs["s"] = self._obj[kwargs["s"]]
                 if "c" in kwargs:
                     if isinstance(kwargs["c"], str):
-                        tit_color = kwargs["c"]
+                        tit_leg = kwargs["c"]
                         kwargs["c"] = self._obj[kwargs["c"]]
                 pc = ax.scatter(top_vals, left_vals, right_vals, **kwargs)
                 if "c" in kwargs:
                     handles, labels = pc.legend_elements(prop="colors", num=6)
                     if len(handles) > 1:
                         leg_color = ax.legend(
-                            handles, labels, loc="upper right", title=tit_color
+                            handles, labels, loc="upper right", title=tit_leg
                         )
                 if "s" in kwargs:
                     handles, labels = pc.legend_elements(prop="sizes", num=6)
                     if len(handles) > 1:
                         leg_size = ax.legend(
-                            handles, labels, loc="upper left", title=tit_size
+                            handles, labels, loc="upper left", title=tit_leg
                         )
             case "plot":
                 pc = ax.plot(top_vals, left_vals, right_vals, **kwargs)
-
+            case "contourf":
+                if "v" in kwargs:
+                    if isinstance(kwargs["v"], str):
+                        tit_leg = kwargs["c"]
+                        v = self._obj[kwargs["v"]]
+                    else:
+                        v = kwargs["v"]
+                    pc = ax.tricontourf(top_vals, left_vals, right_vals, v, **kwargs)
+                    cax = ax.inset_axes([1.05, 0.1, 0.05, 0.9], transform=ax.transAxes)
+                    colorbar = fig.colorbar(pc, cax=cax)
+                    colorbar.set_label(tit_leg, rotation=270, va="baseline")
         if grid:
             ax.grid()
         if return_ax:
