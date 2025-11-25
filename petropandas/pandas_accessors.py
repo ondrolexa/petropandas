@@ -374,15 +374,26 @@ class PetroPlotsAccessor:
         else:
             plt.show()
 
-    def ternary(self, **kwargs):
+    def ternary(self, *args, **kwargs):
         """Ternary scatter plot
 
+        Args:
+            top (str): name of column or expression for top variable.
+                Default column 0
+            left (str): name of column or expression for left variable.
+                Default column 1
+            right (str): name of column or expression for right variable.
+                Default column 2
+
         Keyword Args:
-            top (str): name of column for top variable. Default column 0
-            left (str): name of column for left variable. Default column 1
-            right (str): name of column for right variable. Default column 2
             kind (str): kind of plot, `scatter`, `plot` or `contour`. Other
                 values returns empty plot. Deafult `scatter`.
+            c (str | array like): values used for coloring as expression (str)
+                or array of values.
+            s (str | array like): values used for sizing as expression (str)
+                or array of values.
+            v (str | array like): values used for contouring as expression (str)
+                or array of values.
             ternary_sum (float): Total sum. Default 1.0
             tlim (tuple): top limits. Default(0, 1)
             llim (tuple): top limits. Default(0, 1)
@@ -397,9 +408,18 @@ class PetroPlotsAccessor:
         function, e.g. `s` or `c` to `scatter` or `label`
 
         """
-        top = kwargs.pop("top", self._obj.columns[0])
-        left = kwargs.pop("left", self._obj.columns[1])
-        right = kwargs.pop("right", self._obj.columns[2])
+        if len(args) > 0:
+            top = args[0]
+        else:
+            top = self._obj.columns[0]
+        if len(args) > 1:
+            left = args[1]
+        else:
+            left = self._obj.columns[1]
+        if len(args) > 2:
+            right = args[2]
+        else:
+            right = self._obj.columns[2]
         kind = kwargs.pop("kind", "scatter")
         ternary_sum = kwargs.pop("ternary_sum", 1.0)
         return_ax = kwargs.pop("return_ax", False)
@@ -417,9 +437,9 @@ class PetroPlotsAccessor:
         ax.set_tlabel(top)
         ax.set_llabel(left)
         ax.set_rlabel(right)
-        top_vals = self._obj[top]
-        left_vals = self._obj[left]
-        right_vals = self._obj[right]
+        top_vals = self._obj.eval(top)
+        left_vals = self._obj.eval(left)
+        right_vals = self._obj.eval(right)
         leg_color = False
         leg_size = False
         tit_leg = None
@@ -428,11 +448,11 @@ class PetroPlotsAccessor:
                 if "s" in kwargs:
                     if isinstance(kwargs["s"], str):
                         tit_leg = kwargs["s"]
-                        kwargs["s"] = self._obj[kwargs["s"]]
+                        kwargs["s"] = self._obj.eval(kwargs["s"])
                 if "c" in kwargs:
                     if isinstance(kwargs["c"], str):
                         tit_leg = kwargs["c"]
-                        kwargs["c"] = self._obj[kwargs["c"]]
+                        kwargs["c"] = self._obj.eval(kwargs["c"])
                 pc = ax.scatter(top_vals, left_vals, right_vals, **kwargs)
                 if "c" in kwargs:
                     handles, labels = pc.legend_elements(prop="colors", num=6)
@@ -452,7 +472,7 @@ class PetroPlotsAccessor:
                 if "v" in kwargs:
                     if isinstance(kwargs["v"], str):
                         tit_leg = kwargs["c"]
-                        v = self._obj[kwargs["v"]]
+                        v = self._obj.eval(kwargs["v"])
                     else:
                         v = kwargs["v"]
                     pc = ax.tricontourf(top_vals, left_vals, right_vals, v, **kwargs)
