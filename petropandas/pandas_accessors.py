@@ -399,6 +399,8 @@ class PetroPlotsAccessor:
             llim (tuple): top limits. Default(0, 1)
             rlim (tuple): top limits. Default(0, 1)
             grid (bool): show grid. Default False
+            figsize (tuple): width, height in inches. If not provided, defaults to
+                rcParams["figure.figsize"]
             ax (Axes): matplotlib axes to be used.
             return_ax (bool): Whether to return matplotlib axes.
                 Default False
@@ -425,11 +427,12 @@ class PetroPlotsAccessor:
         return_ax = kwargs.pop("return_ax", False)
         show = kwargs.pop("show", True)
         filename = kwargs.pop("filename", None)
+        figsize = kwargs.pop("figsize", plt.rcParams["figure.figsize"])
         grid = kwargs.pop("grid", False)
         if "ax" in kwargs:
             ax = kwargs.pop("ax")
         else:
-            fig = plt.figure()
+            fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(projection="ternary", ternary_sum=ternary_sum)
         ax.set_tlim(*kwargs.pop("tlim", (0, ternary_sum)))
         ax.set_llim(*kwargs.pop("llim", (0, ternary_sum)))
@@ -1350,12 +1353,16 @@ class OxidesAccessor(AccessorTemplate):
                 Green et al. 2016, Evans & Frost 2021), 'mtl' mantle (Holland et al. 2013).
                 Default is "mp"
             sys_in (str): system comp "wt" or "mol". Default is "mol"
+            title (str): used as title. Default index
+            comment (str): used as comment. Default 'petropandas'
 
         """
         H2O = kwargs.get("H2O", -1)
         oxygen = kwargs.get("oxygen", 0.01)
         db = kwargs.get("db", "mp")
         sys_in = kwargs.get("sys_in", "mol")
+        title = kwargs.get("title", None)
+        comment = kwargs.get("comments", "petropandas")
         # fmt: off
         bulk = {
             "ig": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3", "H2O"],
@@ -1396,7 +1403,10 @@ class OxidesAccessor(AccessorTemplate):
         for ix, row in df[bulk[db]].iterrows():
             oxides = ", ".join(row.keys())
             values = ", ".join([f"{val:.3f}" for val in row.values])
-            print(f"{ix};{'petropandas'};{db};{sys_in};[{oxides}];[{values}];")
+            if title is None:
+                print(f"{ix};{comment};{db};{sys_in};[{oxides}];[{values}];")
+            else:
+                print(f"{title};{comment};{db};{sys_in};[{oxides}];[{values}];")
 
 
 @pd.api.extensions.register_dataframe_accessor("ions")
