@@ -264,6 +264,19 @@ class PetroDBProject:
                 pass
         return PetroDBAreaRecords(res, sample=names)
 
+    def mineral_data(self, mineral: str):
+        """Return spots and profile spots of given mineral dataframe"""
+        res = []
+        samples = self.samples()
+        for sample in samples:
+            spots = sample.spots.df(mineral=mineral, sample_name=True)
+            if not spots.empty:
+                res.append(spots)
+            profiles = sample.profiles(mineral=mineral)
+            for profile in profiles:
+                res.append(profile.spots.df(sample_name=True))
+        return pd.concat(res)
+
     def add_user(self, username: str):
         """Add access to the project to user
 
@@ -541,7 +554,7 @@ class PetroDBSample:
         else:
             raise ValueError(response.json()["detail"])
 
-    def profiles(self, label: str | None = None):
+    def profiles(self, label: str | None = None, mineral: str | None = None):
         """Get profile from database
 
         Args:
@@ -559,6 +572,20 @@ class PetroDBSample:
                 f"/search/profile/{self.__project_id}/{self.__sample_id}/{label}"
             )
             if response.ok:
+                data = response.json()
+                if mineral is not None:
+                    if data["mineral"] == mineral:
+                        return PetroDBProfile(
+                            self.__db,
+                            self.__project_id,
+                            self.__sample_id,
+                            self.name,
+                            profile=response.json(),
+                        )
+                    else:
+                        raise ValueError(
+                            f"Profile with {label=} and {mineral=} not found."
+                        )
                 return PetroDBProfile(
                     self.__db,
                     self.__project_id,
@@ -573,16 +600,29 @@ class PetroDBSample:
                 f"/profiles/{self.__project_id}/{self.__sample_id}"
             )
             if response.ok:
-                return [
-                    PetroDBProfile(
-                        self.__db,
-                        self.__project_id,
-                        self.__sample_id,
-                        self.name,
-                        profile=p,
-                    )
-                    for p in response.json()
-                ]
+                if mineral is not None:
+                    return [
+                        PetroDBProfile(
+                            self.__db,
+                            self.__project_id,
+                            self.__sample_id,
+                            self.name,
+                            profile=p,
+                        )
+                        for p in response.json()
+                        if p["mineral"] == mineral
+                    ]
+                else:
+                    return [
+                        PetroDBProfile(
+                            self.__db,
+                            self.__project_id,
+                            self.__sample_id,
+                            self.name,
+                            profile=p,
+                        )
+                        for p in response.json()
+                    ]
             else:
                 raise ValueError(response.json()["detail"])
 
