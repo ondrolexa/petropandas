@@ -88,6 +88,11 @@ class PetroDB:
     def __repr__(self):
         return f"PetroDB {'OK' if self.__db.logged else 'Not logged'}"
 
+    @property
+    def logged(self) -> bool:
+        """Return True when API credentials are ok."""
+        return self.__db.logged
+
     def projects(self, name: str | None = None):
         """Get project from database
 
