@@ -5,4 +5,4 @@ from petropandas.pandas_accessors import config
 
 __all__ = ("pd", "mindb", "config")
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"

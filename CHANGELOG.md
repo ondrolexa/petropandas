@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.1.1 - 2025-11-27
+## 0.1.2 - 2025-11-27
 
 ### Added
 
@@ -18,6 +18,6 @@ All notable changes to this project will be documented in this file.
 - molprop method abvailable for all accessors
 - oxides order could be defined in config
 
-## 0.1.0 - 2025-10-27
+## 0.1.1 - 2025-10-27
 
 - Initial release
