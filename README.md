@@ -9,14 +9,14 @@ Pandas accessors for petrologists
 
 ## Getting started
 
-First, import the petropandas. Note that numpy, matplotlib.pyplot, pandas and seaborn are also
-imported using common aliases np, plt, pd and sns:
+`petropandas` provides several `pandas.DataFrame` accessors to seemlesly integrate
+common petrological calculations to your Python data analysis workflow.
 
 ```python
-from petropandas import *
+from petropandas import pd, mindb
 ```
 
-You are now ready to use petropandas tools.
+For more details check the [documentation](https://petropandas.readthedocs.io/).
 
 ```python
 df = pd.read_excel("some/folder/data.xlsx")
