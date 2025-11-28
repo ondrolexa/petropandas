@@ -222,11 +222,8 @@ class PetroPlotsAccessor:
     def __init__(self, pandas_obj):
         self._obj = pandas_obj
 
-    def profile(self, **kwargs):
-        """Plot garnet profiles.
-
-        Note:
-            DataFrame must contains garnet endmembers properly sorted.
+    def profile(self, *args, **kwargs):
+        """Create line plots from columns, e.g. garnet profiles
 
         Keyword Args:
             use_index (bool): When True, xticks are derived from DataFrame
@@ -244,17 +241,25 @@ class PetroPlotsAccessor:
             maxticks (int): maximum number of ticks on x-axis. Default 20
             xticks_rotation (int): rotation of xticks labels. Default 0
             markers (list): Markers used. Default None
-            subplot_kws (dict): kwargs passed to matplotlib subplots. Default {}
             grid (bool): Show grid. Default False
             grid_kws (dict): kwargs passed to matplotlib grid.
                 Default dict(visible=True)
             grid_ticks (int): number of ticks on twin axes, when grid is True.
                 Default 10
+            figsize (tuple): width, height in inches. If not provided, defaults to
+                rcParams["figure.figsize"]
+            subplot_kws (dict): kwargs passed to matplotlib subplots. Default {}
+            ax (Axes): matplotlib axes to be used.
+            return_ax (bool): Whether to return matplotlib axes.
+                Default False
+            show (bool): Whether to show plot. Default True
 
         """
         em = self._obj.copy()
-
-        cols = em.columns.tolist()
+        if len(args) > 0:
+            cols = list(args)
+        else:
+            cols = em.columns.tolist()
         extra = kwargs.get("extra", [])
         margin = kwargs.get("margin", 0.1)
         lim = kwargs.get("lim", None)
@@ -266,6 +271,14 @@ class PetroPlotsAccessor:
         xlabel = kwargs.get("xlabel", None)
         xticks_rotation = kwargs.get("xticks_rotation", 0)
         markers = kwargs.get("markers", None)
+        return_ax = kwargs.pop("return_ax", False)
+        show = kwargs.pop("show", True)
+        figsize = kwargs.pop("figsize", plt.rcParams["figure.figsize"])
+        if "ax" in kwargs:
+            ax1 = kwargs.pop("ax")
+            fig = ax1.get_figure()
+        else:
+            fig, ax1 = plt.subplots(figsize=figsize)
 
         # validate
         cols_extra = []
@@ -276,7 +289,7 @@ class PetroPlotsAccessor:
         twin = True if cols_extra else False
 
         colors = sns.color_palette(None, len(cols) + len(cols_extra))
-        fig, ax1 = plt.subplots(**kwargs.get("subplot_kws", {}))
+
         if percents:
             multiple = 100
             unit = " [%]"
@@ -367,12 +380,18 @@ class PetroPlotsAccessor:
                 )
             ax1.grid(kwargs.get("grid_kws", dict(visible=True)))
         fig.tight_layout()
-        if filename is not None:
-            fig.savefig(filename)
-            print(f"{filename} saved.")
-            plt.close(fig)
-        else:
-            plt.show()
+        if return_ax:
+            if twin:
+                return ax1, ax2
+            else:
+                return ax1
+        if show:
+            if filename is not None:
+                fig.savefig(filename)
+                print(f"{filename} saved.")
+                plt.close(fig)
+            else:
+                plt.show()
 
     def ternary(self, *args, **kwargs):
         """Ternary scatter plot
@@ -398,7 +417,9 @@ class PetroPlotsAccessor:
             tlim (tuple): top limits. Default(0, 1)
             llim (tuple): top limits. Default(0, 1)
             rlim (tuple): top limits. Default(0, 1)
-            grid (bool): show grid. Default False
+            grid (bool): Show grid. Default False
+            grid_kws (dict): kwargs passed to matplotlib grid.
+                Default dict(visible=True)
             figsize (tuple): width, height in inches. If not provided, defaults to
                 rcParams["figure.figsize"]
             ax (Axes): matplotlib axes to be used.
@@ -483,7 +504,7 @@ class PetroPlotsAccessor:
                     colorbar = fig.colorbar(pc, cax=cax)
                     colorbar.set_label(tit_leg, rotation=270, va="baseline")
         if grid:
-            ax.grid()
+            ax.grid(kwargs.get("grid_kws", dict(visible=True)))
         if return_ax:
             return ax
         if show:
