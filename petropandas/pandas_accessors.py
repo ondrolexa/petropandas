@@ -236,9 +236,11 @@ class PetroPlotsAccessor:
                 ``None``. Default ``None``
             percents (bool): When ``True`` y-axes scale is percents, otherwise fraction
             xlabel (str): label of the x-axis. Default auto.
+            high (list): Add rectangle span(s) from (xmin, xmax). Default None
+            high_kws (dict): Rectangle span(s) properties. Default None
             filename (str): When not ``None``, the plot is saved to file,
                 otherwise the plot is shown.
-            maxticks (int): maximum number of ticks on x-axis. Default 20
+            maxticks (int): Maximum number of ticks on x-axis. Default 20
             xticks_rotation (int): rotation of xticks labels. Default 0
             markers (list): Markers used. Default None
             grid (bool): Show grid. Default False
@@ -264,6 +266,8 @@ class PetroPlotsAccessor:
         margin = kwargs.get("margin", 0.1)
         lim = kwargs.get("lim", None)
         lim_extra = kwargs.get("lim_extra", None)
+        high = kwargs.get("high", None)
+        high_kws = kwargs.get("high_kws", {})
         filename = kwargs.get("filename", None)
         maxticks = kwargs.get("maxticks", 20)
         percents = kwargs.get("percents", False)
@@ -379,6 +383,18 @@ class PetroPlotsAccessor:
                     np.linspace(ax2.get_ybound()[0], ax2.get_ybound()[1], nticks)
                 )
             ax1.grid(kwargs.get("grid_kws", dict(visible=True)))
+        # high
+        if high is not None:
+            if not isinstance(high[0], tuple):
+                high = [high]
+            def_kwargs = {"color": "lightgrey"}
+            def_kwargs.update(high_kws)
+            res = []
+            for xmin, xmax in high:
+                ax1.axvspan(xmin, xmax, **def_kwargs)
+                res.append(em[(em.index >= xmin) & (em.index <= xmax)])
+            print(pd.concat(res, axis=0).agg(["min", "max"]))
+        # finish
         fig.tight_layout()
         if return_ax:
             if twin:
