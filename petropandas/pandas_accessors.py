@@ -1387,7 +1387,8 @@ class OxidesAccessor(AccessorTemplate):
                 (Green et al. 2016), 'ig' igneous (Holland et al. 2018), 'um' ultramafic
                 (Evans & Frost 2021), 'ume' ultramafic extended (Evans & Frost 2021 + pl, hb and aug
                 from Green et al. 2016), 'mpe' Metapelite extended (White et al. 2014,
-                Green et al. 2016, Evans & Frost 2021), 'mtl' mantle (Holland et al. 2013).
+                Green et al. 2016, Evans & Frost 2021), 'mbe' Metabasite extended (Green et al. 2016,
+                Diener et al. 2007), 'mtl' mantle (Holland et al. 2013).
                 Default is "mp"
             sys_in (str): system comp "wt" or "mol". Default is "mol"
             title (str): used as title. Default index
@@ -1408,6 +1409,7 @@ class OxidesAccessor(AccessorTemplate):
             "um": ["SiO2", "Al2O3", "MgO", "FeO", "O", "H2O", "S"],
             "ume": ["SiO2", "Al2O3", "MgO", "FeO", "O", "H2O", "S", "CaO", "Na2O"],
             "mpe": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "MnO", "H2O", "CO2", "S"],
+            "mbe": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "H2O"],
             "mtl": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "Na2O"],
         }
         # fmt: on
