@@ -459,3 +459,60 @@ class DiMica(Mineral):
             "Muscovite": XMPM * apfu["K{+}"] / Isum,
         }
         return pd.Series(em)
+
+
+class Garnet_TC(Mineral):
+    """Garnet mimicking TC model including Mn"""
+
+    def __init__(self):
+        super().__init__()
+        self.noxy = 12
+        self.needsFe = "Fe3"
+        # fmt: off
+        self.structure = (
+            ("Z", 3, ["Si{4+}"]),
+            ("Y", 2, ["Al{3+}", "Fe{3+}"]),
+            ("X", 3, ["Mg{2+}", "Fe{2+}", "Mn{2+}", "Ca{2+}"]),
+        )
+        # fmt: on
+
+    def endmembers(self, cations, force=False):
+        apfu = self.apfu(cations, force=force)
+        s8t = apfu["Fe{2+}"] + apfu["Mn{2+}"] + apfu["Mg{2+}"] + apfu["Ca{2+}"]
+        s6t = apfu["Al{3+}"] + apfu["Fe{3+}"]
+        em = {
+            "alm": apfu["Fe{2+}"] / s8t,
+            "py": apfu["Mg{2+}"] / s8t,
+            "spss": apfu["Mn{2+}"] / s8t,
+            "gr": apfu["Ca{2+}"] / s8t,
+            "kho": apfu["Fe{3+}"] / s6t,
+        }
+        return pd.Series(em)
+
+
+class Garnet_TCnoMn(Mineral):
+    """Garnet mimicking TC model without Mn"""
+
+    def __init__(self):
+        super().__init__()
+        self.noxy = 12
+        self.needsFe = "Fe3"
+        # fmt: off
+        self.structure = (
+            ("Z", 3, ["Si{4+}"]),
+            ("Y", 2, ["Al{3+}", "Fe{3+}"]),
+            ("X", 3, ["Mg{2+}", "Fe{2+}", "Ca{2+}"]),
+        )
+        # fmt: on
+
+    def endmembers(self, cations, force=False):
+        apfu = self.apfu(cations, force=force)
+        s8t = apfu["Fe{2+}"] + apfu["Mg{2+}"] + apfu["Ca{2+}"]
+        s6t = apfu["Al{3+}"] + apfu["Fe{3+}"]
+        em = {
+            "alm": apfu["Fe{2+}"] / s8t,
+            "py": apfu["Mg{2+}"] / s8t,
+            "gr": apfu["Ca{2+}"] / s8t,
+            "kho": apfu["Fe{3+}"] / s6t,
+        }
+        return pd.Series(em)
