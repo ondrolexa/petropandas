@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.3 - 2025-12-16
+
+### Added
+
+- profile accepts ax, show and high
+- mbe added to MAGEMin
+- Garnet_TC added
+
 ## 0.1.2 - 2025-11-27
 
 ### Added
