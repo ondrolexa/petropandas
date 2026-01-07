@@ -246,28 +246,30 @@ class PetroDBProject:
     @property
     def spots(self):
         """Spots accessor"""
-        res = []
+        records = {}
         names = []
         for sample in self.samples():
             try:
-                res += list(sample.spots.records.values())
-                names += sample.spots.sample
+                s = sample.spots
+                records = records | s.records
+                names += s.sample
             except ValueError:
                 pass
-        return PetroDBSpotRecords(res, sample=names)
+        return PetroDBSpotRecords(records, names)
 
     @property
     def areas(self):
         """Areas accessor"""
-        res = []
+        records = {}
         names = []
         for sample in self.samples():
             try:
-                res += list(sample.areas.records.values())
-                names += sample.areas.sample
+                s = sample.areas
+                records = records | s.records
+                names += s.sample
             except ValueError:
                 pass
-        return PetroDBAreaRecords(res, sample=names)
+        return PetroDBAreaRecords(records, names)
 
     def mineral_data(self, mineral: str):
         """Return spots and profile spots of given mineral dataframe"""
@@ -353,9 +355,13 @@ class PetroDBSample:
         """Spots accessor"""
         response = self.__db.get(f"/spots/{self.__project_id}/{self.__sample_id}")
         if response.ok:
-            return PetroDBSpotRecords(
-                response.json(), sample=len(response.json()) * [self.name]
-            )
+            spots = {
+                res["id"]: PetroDBSpot(
+                    self.__db, self.__project_id, self.__sample_id, spot=res
+                )
+                for res in response.json()
+            }
+            return PetroDBSpotRecords(spots, len(spots) * [self.name])
         else:
             raise ValueError(response.json()["detail"])
 
@@ -466,9 +472,13 @@ class PetroDBSample:
         """Areas accessor"""
         response = self.__db.get(f"/areas/{self.__project_id}/{self.__sample_id}")
         if response.ok:
-            return PetroDBAreaRecords(
-                response.json(), sample=len(response.json()) * [self.name]
-            )
+            areas = {
+                res["id"]: PetroDBArea(
+                    self.__db, self.__project_id, self.__sample_id, area=res
+                )
+                for res in response.json()
+            }
+            return PetroDBAreaRecords(areas, len(areas) * [self.name])
         else:
             raise ValueError(response.json()["detail"])
 
@@ -687,15 +697,16 @@ class PetroDBSample:
 
     @property
     def profilespots(self):
-        res = []
+        records = {}
         names = []
         for profile in self.profiles():
             try:
-                res += list(profile.spots.records.values())
-                names += profile.spots.sample
+                s = profile.spots
+                records = records | s.records
+                names += s.sample
             except ValueError:
                 pass
-        return PetroDBProfilespotRecords(res, sample=names)
+        return PetroDBProfilespotRecords(records, names)
 
 
 class PetroDBSpot:
@@ -850,10 +861,20 @@ class PetroDBProfile:
             f"/profilespots/{self.__project_id}/{self.__sample_id}/{self.__profile_id}"
         )
         if response.ok:
-            recs = response.json()
-            for rec in recs:
-                rec["label"] = self.label
-            return PetroDBProfilespotRecords(recs, sample=len(recs) * [self.samplename])
+            spots = {
+                res["id"]: PetroDBProfileSpot(
+                    self.__db,
+                    self.__project_id,
+                    self.__sample_id,
+                    self.__profile_id,
+                    spot=res,
+                )
+                for res in response.json()
+            }
+            for k in spots:
+                spots[k].data["label"] = self.label
+                spots[k].data["mineral"] = self.mineral
+            return PetroDBProfilespotRecords(spots, len(spots) * [self.samplename])
         else:
             raise ValueError(response.json()["detail"])
 
@@ -1013,13 +1034,17 @@ class PetroDBProfileSpot:
 class PetroDBRecords:
     """Petro DB records accessor"""
 
-    def __init__(self, recs: list, sample: list):
-        self.records = {rec["id"]: rec for rec in recs}
+    def __init__(self, records: dict, sample: list):
+        self.records = records
         self.sample = sample
         self.cols = []
 
     def __repr__(self):
         return f"{len(self.records)} spots"
+
+    def __getitem__(self, id: int):
+        if isinstance(id, int):
+            return self.records[id]
 
     def df(self, **kwargs):
         """Get records as pandas dataframe
@@ -1031,12 +1056,10 @@ class PetroDBRecords:
             cols (list): list of attributes for selection
 
         """
-        res = pd.DataFrame(
-            [row["values"] for row in self.records.values()], index=self.records.keys()
-        )
+        res = pd.DataFrame({k: v.data["values"] for k, v in self.records.items()}).T
         res["sample"] = self.sample
         for col in self.cols:
-            res[col] = [row[col] for row in self.records.values()]
+            res[col] = [row.data[col] for row in self.records.values()]
         for col, val in kwargs.items():
             if col in self.cols:
                 res = res[res[col] == val]
@@ -1044,21 +1067,21 @@ class PetroDBRecords:
 
 
 class PetroDBSpotRecords(PetroDBRecords):
-    def __init__(self, recs: list, sample: list):
-        super().__init__(recs, sample)
+    def __init__(self, records: dict, sample: list):
+        super().__init__(records, sample)
         self.cols = ["label", "mineral"]
 
 
 class PetroDBAreaRecords(PetroDBRecords):
-    def __init__(self, recs: list, sample: list):
-        super().__init__(recs, sample)
+    def __init__(self, records: dict, sample: list):
+        super().__init__(records, sample)
         self.cols = ["label"]
 
 
 class PetroDBProfilespotRecords(PetroDBRecords):
-    def __init__(self, recs: list, sample: list):
-        super().__init__(recs, sample)
-        self.cols = ["label"]
+    def __init__(self, records: dict, sample: list):
+        super().__init__(records, sample)
+        self.cols = ["label", "mineral"]
 
 
 class PetroDBAdmin:
