@@ -1039,9 +1039,6 @@ class PetroDBRecords:
         self.sample = sample
         self.cols = []
 
-    def __repr__(self):
-        return f"{len(self.records)} spots"
-
     def __getitem__(self, id: int):
         if isinstance(id, int):
             return self.records[id]
@@ -1071,17 +1068,26 @@ class PetroDBSpotRecords(PetroDBRecords):
         super().__init__(records, sample)
         self.cols = ["label", "mineral"]
 
+    def __repr__(self):
+        return f"{len(self.records)} spots"
+
 
 class PetroDBAreaRecords(PetroDBRecords):
     def __init__(self, records: dict, sample: list):
         super().__init__(records, sample)
         self.cols = ["label"]
 
+    def __repr__(self):
+        return f"{len(self.records)} areas"
+
 
 class PetroDBProfilespotRecords(PetroDBRecords):
     def __init__(self, records: dict, sample: list):
         super().__init__(records, sample)
         self.cols = ["label", "mineral"]
+
+    def __repr__(self):
+        return f"{len(self.records)} profile spots"
 
 
 class PetroDBAdmin:
