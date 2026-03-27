@@ -233,7 +233,8 @@ class Mineral:
         lastsite = {}
         for site in sf.sites:
             for atom in site.candidates:
-                available = cations.get(atom, 0.0) - sf.get(atom)
+                cat = cations.get(atom, 0.0)
+                available = (0.0 if pd.isnull(cat) else cat) - sf.get(atom)
                 if available > 0:
                     site.add(atom, available)
                     lastsite[atom] = site
