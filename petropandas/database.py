@@ -1053,7 +1053,9 @@ class PetroDBRecords:
             cols (list): list of attributes for selection
 
         """
-        res = pd.DataFrame({k: v.data["values"] for k, v in self.records.items()}).T
+        res = pd.DataFrame(
+            {k: v.data["values"] for k, v in self.records.items()}
+        ).T.convert_dtypes()
         res["sample"] = self.sample
         for col in self.cols:
             res[col] = [row.data[col] for row in self.records.values()]
