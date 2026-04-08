@@ -278,11 +278,17 @@ class PetroDBProject:
         for sample in samples:
             spots = sample.spots.df(mineral=mineral, sample_name=True)
             if not spots.empty:
+                spots["kind"] = "spot"
                 res.append(spots)
             profiles = sample.profiles(mineral=mineral)
             for profile in profiles:
-                res.append(profile.spots.df(sample_name=True))
-        return pd.concat(res)
+                spots = profile.spots.df(sample_name=True)
+                spots["kind"] = "profile"
+                res.append(spots)
+        if res:
+            return pd.concat(res)
+        else:
+            raise ValueError("No data found.")
 
     def add_user(self, username: str):
         """Add access to the project to user
@@ -707,6 +713,23 @@ class PetroDBSample:
             except ValueError:
                 pass
         return PetroDBProfilespotRecords(records, names)
+
+    def mineral_data(self, mineral: str):
+        """Return spots and profile spots of given mineral dataframe"""
+        res = []
+        spots = self.spots.df(mineral=mineral, sample_name=True)
+        if not spots.empty:
+            spots["kind"] = "spot"
+            res.append(spots)
+        profiles = self.profiles(mineral=mineral)
+        for profile in profiles:
+            spots = profile.spots.df(sample_name=True)
+            spots["kind"] = "profile"
+            res.append(spots)
+        if res:
+            return pd.concat(res)
+        else:
+            raise ValueError("No data found.")
 
 
 class PetroDBSpot:
