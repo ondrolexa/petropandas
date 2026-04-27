@@ -1282,6 +1282,8 @@ class OxidesAccessor(AccessorTemplate):
                 Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
             system (str): axfile to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
                 'KFMASH', 'NCKFMASHTOCr', 'NCKFMASTOCr'. Default 'MnNCKFMASHTO'
+            dataframe (bool): When True returns dataframe, otherwise print formatted output.
+                Default False
 
         """
         H2O = kwargs.get("H2O", -1)
@@ -1316,9 +1318,14 @@ class OxidesAccessor(AccessorTemplate):
         for lbl in bulk[system]:
             if lbl not in df:
                 df[lbl] = 0.0
-        print("bulk" + "".join([f"{lbl:>7}" for lbl in bulk[system]]))
-        for ix, row in df[bulk[system]].iterrows():
-            print("bulk" + "".join([f" {v:6.3f}" for v in row.values]) + f"  % {ix}")
+        if kwargs.get("dataframe", False):
+            return df[bulk[system]]
+        else:
+            print("bulk" + "".join([f"{lbl:>7}" for lbl in bulk[system]]))
+            for ix, row in df[bulk[system]].iterrows():
+                print(
+                    "bulk" + "".join([f" {v:6.3f}" for v in row.values]) + f"  % {ix}"
+                )
 
     def Perplexbulk(self, **kwargs) -> None:
         """Print oxides formatted as PerpleX thermodynamic component list
@@ -1333,6 +1340,8 @@ class OxidesAccessor(AccessorTemplate):
                 Moles FeO = FeOtot - 2O and moles Fe2O3 = O. Default 0.01
             system (str): system to be used. One of 'MnNCKFMASHTO', 'NCKFMASHTO',
                 'KFMASH', 'NCKFMASHTOCr', 'NCKFMASTOCr'. Default 'MnNCKFMASHTO'
+            dataframe (bool): When True returns dataframe, otherwise print formatted output.
+                Default False
 
         """
         H2O = kwargs.get("H2O", -1)
@@ -1367,10 +1376,13 @@ class OxidesAccessor(AccessorTemplate):
         for lbl in bulk[system]:
             if lbl not in df:
                 df[lbl] = 0.0
-        print("begin thermodynamic component list")
-        for ox, val in df[bulk[system]].iloc[0].items():
-            print(f"{ox:6s}1 {val:8.5f}      0.00000      0.00000     molar amount")
-        print("end thermodynamic component list")
+        if kwargs.get("dataframe", False):
+            return df[bulk[system]]
+        else:
+            print("begin thermodynamic component list")
+            for ox, val in df[bulk[system]].iloc[0].items():
+                print(f"{ox:6s}1 {val:8.5f}      0.00000      0.00000     molar amount")
+            print("end thermodynamic component list")
 
     def MAGEMin(self, **kwargs) -> None:
         """Print oxides formatted as MAGEMin bulk file
@@ -1393,6 +1405,8 @@ class OxidesAccessor(AccessorTemplate):
             sys_in (str): system comp "wt" or "mol". Default is "mol"
             title (str): used as title. Default index
             comment (str): used as comment. Default 'petropandas'
+            dataframe (bool): When True returns dataframe, otherwise print formatted output.
+                Default False
 
         """
         H2O = kwargs.get("H2O", -1)
@@ -1436,16 +1450,20 @@ class OxidesAccessor(AccessorTemplate):
         for lbl in bulk[db]:
             if lbl not in df:
                 df[lbl] = 0.0
-        print("# HEADER")
-        print("title; comments; db; sysUnit; oxide; frac; frac2")
-        print("# BULK-ROCK COMPOSITION")
-        for ix, row in df[bulk[db]].iterrows():
-            oxides = ", ".join(row.keys())
-            values = ", ".join([f"{val:.3f}" for val in row.values])
-            if title is None:
-                print(f"{ix};{comment};{db};{sys_in};[{oxides}];[{values}];")
-            else:
-                print(f"{title};{comment};{db};{sys_in};[{oxides}];[{values}];")
+
+        if kwargs.get("dataframe", False):
+            return df[bulk[db]]
+        else:
+            print("# HEADER")
+            print("title; comments; db; sysUnit; oxide; frac; frac2")
+            print("# BULK-ROCK COMPOSITION")
+            for ix, row in df[bulk[db]].iterrows():
+                oxides = ", ".join(row.keys())
+                values = ", ".join([f"{val:.3f}" for val in row.values])
+                if title is None:
+                    print(f"{ix};{comment};{db};{sys_in};[{oxides}];[{values}];")
+                else:
+                    print(f"{title};{comment};{db};{sys_in};[{oxides}];[{values}];")
 
 
 @pd.api.extensions.register_dataframe_accessor("ions")
