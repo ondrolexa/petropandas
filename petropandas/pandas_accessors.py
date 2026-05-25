@@ -262,10 +262,41 @@ class PetroPlotsAccessor:
             cols = list(args)
         else:
             cols = em.columns.tolist()
-        extra = kwargs.get("extra", [])
         margin = kwargs.get("margin", 0.1)
-        lim = kwargs.get("lim", None)
-        lim_extra = kwargs.get("lim_extra", None)
+        # Auto grouping and scaling
+        means = em.mean().sort_values()
+        diffs = means.diff().dropna()
+        sdiffs = sorted(diffs)
+        r = sdiffs[2] - sdiffs[0]
+        if (sdiffs[2] - sdiffs[1]) / r > 0.85:
+            split_point = diffs.isin([sdiffs[2]]).idxmax()
+            split_idx = means.index.get_loc(split_point)
+            group1 = means.iloc[:split_idx].index.tolist()
+            group2 = means.iloc[split_idx:].index.tolist()
+        elif (sdiffs[1] - sdiffs[0]) / r > 0.85:
+            split_point = diffs.isin([sdiffs[0]]).idxmax()
+            split_idx = means.index.get_loc(split_point)
+            group1 = means.iloc[:split_idx].index.tolist()
+            group2 = means.iloc[split_idx:].index.tolist()
+        else:
+            group1 = means.index.tolist()
+            group2 = []
+        if group2:
+            cut_value = 100 * (means.iloc[split_idx - 1 : split_idx + 1]).mean()
+            mn1 = 100 * em[group1].min().min()
+            mx2 = 100 * em[group2].max().max()
+            half_value = (mx2 + mn1) / 2
+            mx1 = max(cut_value, half_value)
+            mn2 = min(cut_value, half_value)
+            lim_auto = (mn1 - margin * (mx1 - mn1), mx1 + margin * (mx1 - mn1))
+            lim_extra_auto = (mn2 - margin * (mx2 - mn2), mx2 + margin * (mx2 - mn2))
+        else:
+            lim_auto = None
+            lim_extra_auto = None
+
+        extra = kwargs.get("extra", group2)
+        lim = kwargs.get("lim", lim_auto)
+        lim_extra = kwargs.get("lim_extra", lim_extra_auto)
         high = kwargs.get("high", None)
         high_kws = kwargs.get("high_kws", {})
         filename = kwargs.get("filename", None)
@@ -1459,7 +1490,7 @@ class OxidesAccessor(AccessorTemplate):
             print("# BULK-ROCK COMPOSITION")
             for ix, row in df[bulk[db]].iterrows():
                 oxides = ", ".join(row.keys())
-                values = ", ".join([f"{val:.3f}" for val in row.values])
+                values = ", ".join([f"{val:.4f}" for val in row.values])
                 if title is None:
                     print(f"{ix};{comment};{db};{sys_in};[{oxides}];[{values}];")
                 else:

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## main
+
+### Added
+- dataframe kwarg added to petrosofware bulk calculations
+- petroplots.profile autogrouping and autoscaling implemented
+
 ## 0.1.3 - 2025-12-16
 
 ### Added
