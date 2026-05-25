@@ -262,7 +262,16 @@ class PetroPlotsAccessor:
             cols = list(args)
         else:
             cols = em.columns.tolist()
+        em = em[cols]
         margin = kwargs.get("margin", 0.1)
+        markers = kwargs.get("markers", None)
+        percents = kwargs.get("percents", False)
+        if percents:
+            multiple = 100
+            unit = " [%]"
+        else:
+            multiple = 1
+            unit = " [fraction]"
         # Auto grouping and scaling
         means = em.mean().sort_values()
         diffs = means.diff().dropna()
@@ -282,9 +291,9 @@ class PetroPlotsAccessor:
             group1 = means.index.tolist()
             group2 = []
         if group2:
-            cut_value = 100 * (means.iloc[split_idx - 1 : split_idx + 1]).mean()
-            mn1 = 100 * em[group1].min().min()
-            mx2 = 100 * em[group2].max().max()
+            cut_value = multiple * (means.iloc[split_idx - 1 : split_idx + 1]).mean()
+            mn1 = multiple * em[group1].min().min()
+            mx2 = multiple * em[group2].max().max()
             half_value = (mx2 + mn1) / 2
             mx1 = max(cut_value, half_value)
             mn2 = min(cut_value, half_value)
@@ -301,11 +310,9 @@ class PetroPlotsAccessor:
         high_kws = kwargs.get("high_kws", {})
         filename = kwargs.get("filename", None)
         maxticks = kwargs.get("maxticks", 20)
-        percents = kwargs.get("percents", False)
         use_index = kwargs.get("use_index", False)
         xlabel = kwargs.get("xlabel", None)
         xticks_rotation = kwargs.get("xticks_rotation", 0)
-        markers = kwargs.get("markers", None)
         return_ax = kwargs.pop("return_ax", False)
         show = kwargs.pop("show", True)
         figsize = kwargs.pop("figsize", plt.rcParams["figure.figsize"])
@@ -316,21 +323,21 @@ class PetroPlotsAccessor:
             fig, ax1 = plt.subplots(figsize=figsize)
 
         # validate
+        cols_original = cols.copy()
         cols_extra = []
         for c in extra:
             if c in cols:
                 cols.remove(c)
                 cols_extra.append(c)
+
+        # keep original order for consistency
+        if markers is not None:
+            markers = [markers[cols_original.index(c)] for c in cols + cols_extra]
+        colors = sns.color_palette(None, len(cols) + len(cols_extra))
+        colors = [colors[cols_original.index(c)] for c in cols + cols_extra]
+
         twin = True if cols_extra else False
 
-        colors = sns.color_palette(None, len(cols) + len(cols_extra))
-
-        if percents:
-            multiple = 100
-            unit = " [%]"
-        else:
-            multiple = 1
-            unit = " [fraction]"
         if use_index:
             xlabel = "index" if xlabel is None else xlabel
         else:
