@@ -21,14 +21,14 @@ dependencies = [
     "openpyxl",
     "periodictable",
     "mpltern",
-    "requests",
 ]
 
 [project.optional-dependencies]
+database = ["requests"]
 extra = ["jupyterlab"]
 tests = ["pytest", "nbval"]
 docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]", "mkdocs-jupyter"]
-dev = ["petropandas[extra,tests,docs]", "black"]
+dev = ["petropandas[extra,tests,docs,database]", "black"]
 
 [project.urls]
 Homepage = "https://github.com/ondrolexa/petropandas"

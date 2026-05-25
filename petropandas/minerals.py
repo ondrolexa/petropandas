@@ -294,6 +294,8 @@ class Garnet_Fe2(Mineral):
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)
         esum = apfu["Fe{2+}"] + apfu["Mn{2+}"] + apfu["Mg{2+}"] + apfu["Ca{2+}"]
+        if esum == 0:
+            return pd.Series({"Alm": 0.0, "Prp": 0.0, "Sps": 0.0, "Grs": 0.0})
         em = {
             "Alm": apfu["Fe{2+}"] / esum,
             "Prp": apfu["Mg{2+}"] / esum,
@@ -322,6 +324,18 @@ class Garnet(Mineral):
         apfu = self.apfu(cations, force=force)
         s8t = apfu["Fe{2+}"] + apfu["Mn{2+}"] + apfu["Mg{2+}"] + apfu["Ca{2+}"]
         s6t = apfu["Ti{4+}"] + apfu["Al{3+}"] + apfu["Cr{3+}"] + apfu["Fe{3+}"]
+        if s8t == 0 or s6t == 0:
+            return pd.Series(
+                {
+                    "Alm": 0.0,
+                    "Prp": 0.0,
+                    "Sps": 0.0,
+                    "Grs": 0.0,
+                    "Adr": 0.0,
+                    "Uv": 0.0,
+                    "CaTi": 0.0,
+                }
+            )
         # end members in mol%
         em = {
             "Alm": apfu["Fe{2+}"] / s8t,
@@ -350,6 +364,8 @@ class Feldspar(Mineral):
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)
         alk = apfu["Ca{2+}"] + apfu["Na{+}"] + apfu["K{+}"]
+        if alk == 0:
+            return pd.Series({"An": 0.0, "Ab": 0.0, "Or": 0.0})
         em = {
             "An": apfu["Ca{2+}"] / alk,
             "Ab": apfu["Na{+}"] / alk,
@@ -374,6 +390,8 @@ class Pyroxene_Fe2(Mineral):
     def endmembers(self, cations, force=False):
         apfu = self.apfu(cations, force=force)
         esum = apfu["Fe{2+}"] + apfu["Mn{2+}"] + apfu["Mg{2+}"] + apfu["Ca{2+}"]
+        if esum == 0:
+            return pd.Series({"En": 0.0, "Wo": 0.0, "Fs": 0.0})
         em = {
             "En": apfu["Mg{2+}"] / esum,
             "Wo": apfu["Ca{2+}"] / esum,
@@ -444,9 +462,11 @@ class DiMica(Mineral):
     def endmembers(self, cations, force=False):
         sf = self.calculate(cations, force=force)
         apfu = self.apfu(cations, force=force)
-        Xm = sf.site("M").get("Al{3+}") - 1
+        m_site = sf.site("M")
+        Xm = (m_site.get("Al{3+}") - 1) if m_site is not None else 0.0
         XCel = 1 - Xm  # total amout (Fe Al-Celadonite + Mg Al-Celadonite)
-        XMg = apfu["Mg{2+}"] / (apfu["Mg{2+}"] + apfu["Fe{2+}"])
+        fe_mg_sum = apfu["Mg{2+}"] + apfu["Fe{2+}"]
+        XMg = apfu["Mg{2+}"] / fe_mg_sum if fe_mg_sum > 0 else 0.0
         Isum = apfu["Ca{2+}"] + apfu["Na{+}"] + apfu["K{+}"]
         XMPM = (
             Isum * Xm
@@ -455,9 +475,9 @@ class DiMica(Mineral):
             "Al-Celadonite": XMg * XCel,
             "Fe Al-Celadonite": XCel - XMg * XCel,
             "Pyrophyllite": Xm - XMPM,
-            "Margarite": XMPM * apfu["Ca{2+}"] / Isum,
-            "Paragonite": XMPM * apfu["Na{+}"] / Isum,
-            "Muscovite": XMPM * apfu["K{+}"] / Isum,
+            "Margarite": XMPM * apfu["Ca{2+}"] / Isum if Isum != 0 else 0.0,
+            "Paragonite": XMPM * apfu["Na{+}"] / Isum if Isum != 0 else 0.0,
+            "Muscovite": XMPM * apfu["K{+}"] / Isum if Isum != 0 else 0.0,
         }
         return pd.Series(em)
 
@@ -481,6 +501,10 @@ class Garnet_TC(Mineral):
         apfu = self.apfu(cations, force=force)
         s8t = apfu["Fe{2+}"] + apfu["Mn{2+}"] + apfu["Mg{2+}"] + apfu["Ca{2+}"]
         s6t = apfu["Al{3+}"] + apfu["Fe{3+}"]
+        if s8t == 0 or s6t == 0:
+            return pd.Series(
+                {"alm": 0.0, "py": 0.0, "spss": 0.0, "gr": 0.0, "kho": 0.0}
+            )
         em = {
             "alm": apfu["Fe{2+}"] / s8t,
             "py": apfu["Mg{2+}"] / s8t,
@@ -510,6 +534,8 @@ class Garnet_TCnoMn(Mineral):
         apfu = self.apfu(cations, force=force)
         s8t = apfu["Fe{2+}"] + apfu["Mg{2+}"] + apfu["Ca{2+}"]
         s6t = apfu["Al{3+}"] + apfu["Fe{3+}"]
+        if s8t == 0 or s6t == 0:
+            return pd.Series({"alm": 0.0, "py": 0.0, "gr": 0.0, "kho": 0.0})
         em = {
             "alm": apfu["Fe{2+}"] / s8t,
             "py": apfu["Mg{2+}"] / s8t,

@@ -276,22 +276,31 @@ class PetroPlotsAccessor:
         means = em.mean().sort_values()
         diffs = means.diff().dropna()
         sdiffs = sorted(diffs)
-        r = sdiffs[2] - sdiffs[0]
-        if (sdiffs[2] - sdiffs[1]) / r > 0.85:
-            split_point = diffs.isin([sdiffs[2]]).idxmax()
-            split_idx = means.index.get_loc(split_point)
-            group1 = means.iloc[:split_idx].index.tolist()
-            group2 = means.iloc[split_idx:].index.tolist()
-        elif (sdiffs[1] - sdiffs[0]) / r > 0.85:
-            split_point = diffs.isin([sdiffs[0]]).idxmax()
-            split_idx = means.index.get_loc(split_point)
-            group1 = means.iloc[:split_idx].index.tolist()
-            group2 = means.iloc[split_idx:].index.tolist()
-        else:
+        try:
+            r = sdiffs[2] - sdiffs[0]
+            if (sdiffs[2] - sdiffs[1]) / r > 0.85:
+                split_point = diffs.isin([sdiffs[2]]).idxmax()
+                split_idx = means.index.get_loc(split_point)
+                group1 = means.iloc[:split_idx].index.tolist()
+                group2 = means.iloc[split_idx:].index.tolist()
+            elif (sdiffs[1] - sdiffs[0]) / r > 0.85:
+                split_point = diffs.isin([sdiffs[0]]).idxmax()
+                split_idx = means.index.get_loc(split_point)
+                group1 = means.iloc[:split_idx].index.tolist()
+                group2 = means.iloc[split_idx:].index.tolist()
+            else:
+                group1 = means.index.tolist()
+                group2 = []
+        except IndexError:
             group1 = means.index.tolist()
             group2 = []
         if group2:
-            cut_value = multiple * (means.iloc[split_idx - 1 : split_idx + 1]).mean()
+            if split_idx > 0:
+                cut_value = (
+                    multiple * (means.iloc[split_idx - 1 : split_idx + 1]).mean()
+                )
+            else:
+                cut_value = multiple * means.iloc[0]
             mn1 = multiple * em[group1].min().min()
             mx2 = multiple * em[group2].max().max()
             half_value = (mx2 + mn1) / 2
@@ -434,18 +443,17 @@ class PetroPlotsAccessor:
             print(pd.concat(res, axis=0).agg(["min", "max"]))
         # finish
         fig.tight_layout()
-        if return_ax:
+        if filename is not None:
+            fig.savefig(filename)
+            print(f"{filename} saved.")
+            plt.close(fig)
+        elif return_ax:
             if twin:
                 return ax1, ax2
             else:
                 return ax1
-        if show:
-            if filename is not None:
-                fig.savefig(filename)
-                print(f"{filename} saved.")
-                plt.close(fig)
-            else:
-                plt.show()
+        elif show:
+            plt.show()
 
     def ternary(self, *args, **kwargs):
         """Ternary scatter plot
@@ -549,7 +557,7 @@ class PetroPlotsAccessor:
             case "contourf":
                 if "v" in kwargs:
                     if isinstance(kwargs["v"], str):
-                        tit_leg = kwargs["c"]
+                        tit_leg = kwargs["v"]
                         v = self._obj.eval(kwargs["v"])
                     else:
                         v = kwargs["v"]
@@ -589,7 +597,8 @@ class IsoplotAccessor:
         self._obj = pandas_obj
 
     def _validate(self, obj):
-        # verify there is a isoplot column
+        self._names = []
+        self._others = []
         valid = []
         for col in obj.columns:
             if col in ISOPLOT:
@@ -760,7 +769,7 @@ class AccessorTemplate:
 
     def mean(self) -> pd.DataFrame:
         """Return Dataframe with single row of arithmetic means of valid columns"""
-        return (self._df.sum(axis=0) / len(self._df)).to_frame().T
+        return self._df.mean().to_frame().T
 
     def sum(self) -> pd.DataFrame:
         """Return Dataframe with single row of sum of valid columns"""
@@ -794,7 +803,7 @@ class AccessorTemplate:
         """
         title = kwargs.pop("title", None)
         filename = kwargs.pop("filename", None)
-        dpi = kwargs.pop("filename", 150)
+        dpi = kwargs.pop("dpi", 150)
 
         if "vars" not in kwargs:
             kwargs["vars"] = self._names
@@ -827,7 +836,7 @@ class AccessorTemplate:
         """
         title = kwargs.pop("title", None)
         filename = kwargs.pop("filename", None)
-        dpi = kwargs.pop("filename", 150)
+        dpi = kwargs.pop("dpi", 150)
         melt = {}
 
         if "vars" not in kwargs:
@@ -844,7 +853,7 @@ class AccessorTemplate:
         m = pd.melt(self.df(keep=keep), **melt)
         g = sns.boxplot(m, x="variable", y="value", **kwargs)
         if title is not None:
-            g.axes.title(title)
+            g.set_title(title)
         if filename is not None:
             g.figure.savefig(filename, dpi=dpi)
             plt.close(g.figure)
@@ -864,7 +873,7 @@ class AccessorTemplate:
         """
         title = kwargs.pop("title", None)
         filename = kwargs.pop("filename", None)
-        dpi = kwargs.pop("filename", 150)
+        dpi = kwargs.pop("dpi", 150)
 
         if "vmin" not in kwargs:
             kwargs["vmin"] = -1
@@ -877,10 +886,10 @@ class AccessorTemplate:
 
         g = sns.heatmap(self._df.corr(), **kwargs)
         if title is not None:
-            g.axes.title(title)
+            g.set_title(title)
         if filename is not None:
             g.figure.savefig(filename, dpi=dpi)
-            plt.close(g.fig)
+            plt.close(g.figure)
         else:
             plt.show()
 
@@ -961,7 +970,7 @@ class OxidesAccessor(AccessorTemplate):
         res = self.props["noxy"] * self._df.div(self.props["mass"])
         return self._final(res, **kwargs)
 
-    def omega(self, **kwargs) -> float:
+    def omega(self, **kwargs) -> pd.Series:
         """Oxygen to positive atomic charges ratio
 
         Args:
@@ -1173,7 +1182,7 @@ class OxidesAccessor(AccessorTemplate):
             noxy = kwargs.get("noxy", 1)
 
         charge = self.cat_number(dropna=False).mul(self.cnf(ncat), axis=0)
-        if ("Fe2O3" in self._names) & ("FeO" not in self._names):
+        if "Fe2O3" in self._names and "FeO" not in self._names:
             charge.loc[pd.isna(self._df["Fe2O3"]), "Fe2O3"] = 0
             chargedef = 2 * noxy - self.charges(ncat).sum(axis=1)
             toconv = chargedef
@@ -1212,6 +1221,19 @@ class OxidesAccessor(AccessorTemplate):
         res[df.columns] = df
         return self._final(res, **kwargs)
 
+    def _mineral_apply(self, mineral, method, **kwargs):
+        force = kwargs.get("force", False)
+        if not mineral.has_endmembers:
+            raise NoEndMembers(mineral)
+        if mineral.needsFe == "Fe2":
+            dt = self.convert_Fe(**kwargs)
+        elif mineral.needsFe == "Fe3":
+            dt = self.recalculate_Fe(mineral=mineral, **kwargs)
+        else:
+            dt = self.df()
+        cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
+        return cations.ions.df().apply(lambda row: method(row, force=force), axis=1)
+
     def apfu(self, mineral: Mineral, **kwargs) -> pd.DataFrame:
         """Calculate a.p.f.u for given mineral
 
@@ -1227,21 +1249,8 @@ class OxidesAccessor(AccessorTemplate):
             Dataframe with apfu for given mineral
 
         """
-        force = kwargs.get("force", False)
-        if mineral.has_endmembers:
-            if mineral.needsFe == "Fe2":
-                dt = self.convert_Fe(**kwargs)
-            elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral=mineral, **kwargs)
-            else:
-                dt = self.df()
-            cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
-            res = []
-            for _, row in cations.ions.df().iterrows():
-                res.append(mineral.apfu(row, force=force))
-            return self._final(pd.DataFrame(res, index=self._obj.index), **kwargs)
-        else:
-            raise NoEndMembers(mineral)
+        res = self._mineral_apply(mineral, mineral.apfu, **kwargs)
+        return self._final(res, **kwargs)
 
     def check_stechiometry(self, mineral: Mineral, **kwargs) -> pd.Series:
         """Calculate average missfit of populated and ideal cations on sites for given mineral
@@ -1256,21 +1265,9 @@ class OxidesAccessor(AccessorTemplate):
             Series with calculated misfit
 
         """
-        force = kwargs.get("force", False)
-        if mineral.has_endmembers:
-            if mineral.needsFe == "Fe2":
-                dt = self.convert_Fe(**kwargs)
-            elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral=mineral, **kwargs)
-            else:
-                dt = self.df()
-            cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
-            res = []
-            for _, row in cations.ions.df().iterrows():
-                res.append(mineral.check_stechiometry(row, force=force))
-            return pd.Series(res, index=self._obj.index, name="misfit")
-        else:
-            raise NoEndMembers(mineral)
+        res = self._mineral_apply(mineral, mineral.check_stechiometry, **kwargs)
+        res.name = "misfit"
+        return res
 
     def endmembers(self, mineral: Mineral, **kwargs) -> pd.DataFrame:
         """Calculate endmembers proportions
@@ -1280,7 +1277,7 @@ class OxidesAccessor(AccessorTemplate):
 
         Keyword Args:
             tocat (bool): when ``True`` normalize to cations, otherwise to oxygens.
-                Default ``False``
+                Default ``True``
             force (bool): when True, remaining cations are added to last site
             keep (list): list of additional columns to be included. Default [].
             dropna (bool): whether to drop columns with NA only. Default True
@@ -1291,21 +1288,35 @@ class OxidesAccessor(AccessorTemplate):
         """
         if "tocat" not in kwargs:
             kwargs["tocat"] = True
-        force = kwargs.get("force", False)
-        if mineral.has_endmembers:
-            if mineral.needsFe == "Fe2":
-                dt = self.convert_Fe(**kwargs)
-            elif mineral.needsFe == "Fe3":
-                dt = self.recalculate_Fe(mineral=mineral, **kwargs)
-            else:
-                dt = self.df()
-            cations = dt.oxides.cations(noxy=mineral.noxy, ncat=mineral.ncat, **kwargs)
-            res = []
-            for _, row in cations.ions.df().iterrows():
-                res.append(mineral.endmembers(row, force=force))
-            return self._final(pd.DataFrame(res, index=self._obj.index), **kwargs)
+        res = self._mineral_apply(mineral, mineral.endmembers, **kwargs)
+        return self._final(res, **kwargs)
+
+    def _thermo_bulk_prep(
+        self, bulk, key, oxygen_key="O", oxygen_mult=1, use_molprop=True, **kwargs
+    ):
+        H2O = kwargs.get("H2O", -1)
+        oxygen = kwargs.get("oxygen", 0.01)
+        df = self.convert_Fe().oxides.apatite_correction()
+        # Water
+        if "H2O" in bulk[key]:
+            if "H2O" not in df:
+                if H2O == -1:
+                    H2O = 100 - df.sum(axis=1)
+                    H2O[H2O < 0] = 0
+                else:
+                    H2O = H2O * df.sum(axis=1) / (100 - H2O)
+                df["H2O"] = H2O
+        use = df.columns.intersection(bulk[key])
+        if use_molprop:
+            df = df[use].oxides.molprop().oxides.scale(to=100 - oxygen * oxygen_mult)
         else:
-            raise NoEndMembers(mineral)
+            df = df[use].oxides.scale(to=100 - oxygen * oxygen_mult)
+        if oxygen_key in bulk[key]:
+            df[oxygen_key] = oxygen * oxygen_mult
+        for lbl in bulk[key]:
+            if lbl not in df:
+                df[lbl] = 0.0
+        return df
 
     def TCbulk(self, **kwargs) -> None:
         """Print oxides formatted as THERMOCALC bulk script
@@ -1324,8 +1335,6 @@ class OxidesAccessor(AccessorTemplate):
                 Default False
 
         """
-        H2O = kwargs.get("H2O", -1)
-        oxygen = kwargs.get("oxygen", 0.01)
         system = kwargs.get("system", "MnNCKFMASHTO")
         # fmt: off
         bulk = {
@@ -1336,26 +1345,11 @@ class OxidesAccessor(AccessorTemplate):
             "NCKFMASTOCr": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "TiO2", "O", "Cr2O3"],
         }
         # fmt: on
-        assert system in bulk, "Not valid system"
-
-        df = self.convert_Fe().oxides.apatite_correction()
-        # Water
-        if "H2O" in bulk[system]:
-            if "H2O" not in df:
-                if H2O == -1:
-                    H2O = 100 - df.sum(axis=1)
-                    H2O[H2O < 0] = 0
-                else:
-                    H2O = H2O * df.sum(axis=1) / (100 - H2O)
-                df["H2O"] = H2O
-        use = df.columns.intersection(bulk[system])
-        df = df[use].oxides.molprop().oxides.scale(to=100 - oxygen)
-        if "O" in bulk[system]:
-            df["O"] = oxygen
-        # add missing
-        for lbl in bulk[system]:
-            if lbl not in df:
-                df[lbl] = 0.0
+        if system not in bulk:
+            raise ValueError(f"Not valid system: {system}")
+        df = self._thermo_bulk_prep(
+            bulk, system, oxygen_key="O", oxygen_mult=1, **kwargs
+        )
         if kwargs.get("dataframe", False):
             return df[bulk[system]]
         else:
@@ -1382,8 +1376,6 @@ class OxidesAccessor(AccessorTemplate):
                 Default False
 
         """
-        H2O = kwargs.get("H2O", -1)
-        oxygen = kwargs.get("oxygen", 0.01)
         system = kwargs.get("system", "MnNCKFMASHTO")
         # fmt: off
         bulk = {
@@ -1394,26 +1386,11 @@ class OxidesAccessor(AccessorTemplate):
             "NCKFMASTOCr": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "TiO2", "O2", "Cr2O3"],
         }
         # fmt: on
-        assert system in bulk, "Not valid system"
-
-        df = self.convert_Fe().oxides.apatite_correction()
-        # Water
-        if "H2O" in bulk[system]:
-            if "H2O" not in df:
-                if H2O == -1:
-                    H2O = 100 - df.sum(axis=1)
-                    H2O[H2O < 0] = 0
-                else:
-                    H2O = H2O * df.sum(axis=1) / (100 - H2O)
-                df["H2O"] = H2O
-        use = df.columns.intersection(bulk[system])
-        df = df[use].oxides.molprop().oxides.scale(to=100 - oxygen)
-        if "O2" in bulk[system]:
-            df["O2"] = 2 * oxygen
-        # add missing
-        for lbl in bulk[system]:
-            if lbl not in df:
-                df[lbl] = 0.0
+        if system not in bulk:
+            raise ValueError(f"Not valid system: {system}")
+        df = self._thermo_bulk_prep(
+            bulk, system, oxygen_key="O2", oxygen_mult=2, **kwargs
+        )
         if kwargs.get("dataframe", False):
             return df[bulk[system]]
         else:
@@ -1447,8 +1424,6 @@ class OxidesAccessor(AccessorTemplate):
                 Default False
 
         """
-        H2O = kwargs.get("H2O", -1)
-        oxygen = kwargs.get("oxygen", 0.01)
         db = kwargs.get("db", "mp")
         sys_in = kwargs.get("sys_in", "mol")
         title = kwargs.get("title", None)
@@ -1465,30 +1440,16 @@ class OxidesAccessor(AccessorTemplate):
             "mtl": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "Na2O"],
         }
         # fmt: on
-        assert db in bulk, "Not valid database"
-
-        df = self.convert_Fe().oxides.apatite_correction()
-        # Water
-        if "H2O" in bulk[db]:
-            if "H2O" not in df:
-                if H2O == -1:
-                    H2O = 100 - df.sum(axis=1)
-                    H2O[H2O < 0] = 0
-                else:
-                    H2O = H2O * df.sum(axis=1) / (100 - H2O)
-                df["H2O"] = H2O
-        use = df.columns.intersection(bulk[db])
-        if sys_in == "mol":
-            df = df[use].oxides.molprop().oxides.scale(to=100 - oxygen)
-        else:
-            df = df[use].oxides.scale(to=100 - oxygen)
-        if "O" in bulk[db]:
-            df["O"] = oxygen
-        # add missing
-        for lbl in bulk[db]:
-            if lbl not in df:
-                df[lbl] = 0.0
-
+        if db not in bulk:
+            raise ValueError(f"Not valid database: {db}")
+        df = self._thermo_bulk_prep(
+            bulk,
+            db,
+            oxygen_key="O",
+            oxygen_mult=1,
+            use_molprop=sys_in == "mol",
+            **kwargs,
+        )
         if kwargs.get("dataframe", False):
             return df[bulk[db]]
         else:
@@ -1695,7 +1656,3 @@ class REEAccessor(AccessorTemplate):
             plt.close(fig)
         else:
             plt.show()
-
-
-if __name__ == "__main__":  # pragma: no cover
-    pass

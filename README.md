@@ -7,6 +7,27 @@
 
 Pandas accessors for petrologists
 
+## Installation
+
+```bash
+pip install petropandas
+```
+
+### Optional extras
+
+| Extra | Includes | Description |
+|---|---|---|
+| `database` | `requests` | Client for the remote petrodb REST API (`petropandas.database`) |
+| `extra` | `jupyterlab` | JupyterLab support |
+| `tests` | `pytest`, `nbval` | Run the test suite |
+| `docs` | `mkdocs`, ... | Build documentation locally |
+| `dev` | all of the above | Development setup |
+
+```bash
+pip install petropandas[database]      # basic + database client
+pip install petropandas[dev]           # full development setup
+```
+
 ## Getting started
 
 `petropandas` provides several `pandas.DataFrame` accessors to seemlesly integrate
@@ -24,4 +45,22 @@ df.oxides.molprop()
 df.oxides.cations(noxy=12)
 
 df.ree.normalize(reservoir='CI Chondrites', reference='McDonough & Sun 1995')
+```
+
+### Database client (optional)
+
+The `petropandas.database` module provides a client for a remote petrodb REST API.
+Install the extra and use it alongside the accessors:
+
+```bash
+pip install petropandas[database]
+```
+
+```python
+from petropandas.database import PetroDB
+
+db = PetroDB('http://127.0.0.1:8000', 'user', 'password')
+project = db.projects(name="MyProject")
+sample = project.samples(name="DB250")
+df = sample.spots.df(mineral="Grt")
 ```

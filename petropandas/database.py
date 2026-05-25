@@ -14,65 +14,127 @@ Usage examples:
 
 """
 
+import logging
 from functools import cached_property
+from typing import Any
 
 import pandas as pd
 import requests
 
+logger = logging.getLogger(__name__)
 
-def zero_negative_nan(x):
-    if isinstance(x, (int, float, complex)) and not isinstance(x, bool):
-        if x > 0:
-            return x
-        else:
-            return float("nan")
-    else:
+
+# ── exceptions ──────────────────────────────────────────────────────────
+
+
+class PetroDBError(Exception):
+    """Base exception for petrodb operations."""
+
+
+class AuthError(PetroDBError):
+    """Authentication failure."""
+
+
+class NotFoundError(PetroDBError):
+    """Resource not found."""
+
+
+class APIError(PetroDBError):
+    """API returned an error response."""
+
+
+# ── helpers ─────────────────────────────────────────────────────────────
+
+
+def zero_negative_nan(x: Any) -> Any:
+    if isinstance(x, bool):
         return x
+    if isinstance(x, complex):
+        return x if x.real > 0 else float("nan")
+    if isinstance(x, (int, float)):
+        return x if x > 0 else float("nan")
+    return x
+
+
+# ── low-level HTTP transport ────────────────────────────────────────────
 
 
 class PetroAPI:
-    def __init__(self, api_url, username, password):
-        response = requests.post(
-            f"{api_url}/token",
-            data={"username": username, "password": password},
+    """Low-level HTTP client for the petrodb REST API."""
+
+    def __init__(self, api_url: str, username: str, password: str, timeout: int = 30):
+        self._session = requests.Session()
+        self._api_url = api_url
+        self._username = username
+        self._password = password
+        self._timeout = timeout
+        self._token: str | None = None
+        self.logged = False
+        self._login()
+
+    def _login(self) -> None:
+        response = self._session.post(
+            f"{self._api_url}/token",
+            data={"username": self._username, "password": self._password},
+            timeout=self._timeout,
         )
         if response.ok:
-            self.__api_url = api_url
-            self.__username = username
-            self.__password = password
+            self._token = response.json().get("access_token")
             self.logged = True
+            logger.info("Authenticated to petrodb at %s", self._api_url)
         else:
             self.logged = False
+            logger.warning("Authentication to petrodb at %s failed", self._api_url)
 
-    def __authorize(self):
-        if self.logged:
-            response = requests.post(
-                f"{self.__api_url}/token",
-                data={"username": self.__username, "password": self.__password},
-            )
-            if response.ok:
-                token = response.json()
-                return {"Authorization": f"Bearer {token.get('access_token')}"}
-            else:
-                raise ValueError("Wrong url or credentials")
-        else:
-            raise ConnectionError("Not logged in")
+    def _reauthenticate(self) -> bool:
+        """Attempt to refresh the JWT token."""
+        self._login()
+        return self.logged
 
-    def get(self, path):
-        headers = self.__authorize()
-        return requests.get(f"{self.__api_url}/api{path}", headers=headers)
+    def _authorize(self) -> dict[str, str]:
+        if not self.logged or self._token is None:
+            raise AuthError("Not logged in")
+        return {"Authorization": f"Bearer {self._token}"}
 
-    def post(self, path, data):
-        headers = self.__authorize()
-        return requests.post(f"{self.__api_url}/api{path}", json=data, headers=headers)
+    def _request(
+        self, method: str, path: str, json_data: dict | list | None = None
+    ) -> requests.Response:
+        headers = self._authorize()
+        url = f"{self._api_url}/api{path}"
+        kwargs: dict = {"headers": headers, "timeout": self._timeout}
+        if json_data is not None:
+            kwargs["json"] = json_data
 
-    def put(self, path, data):
-        headers = self.__authorize()
-        return requests.put(f"{self.__api_url}/api{path}", json=data, headers=headers)
+        http_method = getattr(self._session, method.lower())
+        response = http_method(url, **kwargs)
 
-    def delete(self, path):
-        headers = self.__authorize()
-        return requests.delete(f"{self.__api_url}/api{path}", headers=headers)
+        if response.status_code == 401:
+            logger.info("Token expired, re-authenticating…")
+            if self._reauthenticate():
+                headers = self._authorize()
+                kwargs["headers"] = headers
+                response = http_method(url, **kwargs)
+
+        return response
+
+    def get(self, path: str) -> requests.Response:
+        """Send an authenticated GET request."""
+        return self._request("GET", path)
+
+    def post(self, path: str, data: dict | list) -> requests.Response:
+        """Send an authenticated POST request with JSON body."""
+        return self._request("POST", path, json_data=data)
+
+    def put(self, path: str, data: dict) -> requests.Response:
+        """Send an authenticated PUT request with JSON body."""
+        return self._request("PUT", path, json_data=data)
+
+    def delete(self, path: str) -> requests.Response:
+        """Send an authenticated DELETE request."""
+        return self._request("DELETE", path)
+
+
+# ── high-level facade ───────────────────────────────────────────────────
 
 
 class PetroDB:
@@ -82,16 +144,29 @@ class PetroDB:
 
     """
 
-    def __init__(self, api_url, username, password):
-        self.__db = PetroAPI(api_url, username, password)
+    def __init__(self, api_url: str, username: str, password: str, timeout: int = 30):
+        self._db = PetroAPI(api_url, username, password, timeout)
 
-    def __repr__(self):
-        return f"PetroDB {'OK' if self.__db.logged else 'Not logged'}"
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self._db._session.close()
+
+    def __repr__(self) -> str:
+        return f"PetroDB {'OK' if self._db.logged else 'Not logged'}"
 
     @property
     def logged(self) -> bool:
         """Return True when API credentials are ok."""
-        return self.__db.logged
+        return self._db.logged
+
+    def _check(self, response: requests.Response) -> dict:
+        if response.ok:
+            return response.json()
+        detail = response.json().get("detail", "Unknown error")
+        logger.error("API error: %s (status %s)", detail, response.status_code)
+        raise APIError(detail)
 
     def projects(self, name: str | None = None):
         """Get project from database
@@ -103,21 +178,19 @@ class PetroDB:
             Project instance or list of all projects if the name is not provided.
 
         Raises:
-            ValueError: If project(s) was not found.
+            APIError: If project(s) was not found.
 
         """
         if name is not None:
-            response = self.__db.get(f"/search/project/{name}")
+            response = self._db.get(f"/search/project/{name}")
             if response.ok:
-                return PetroDBProject(self.__db, project=response.json())
-            else:
-                raise ValueError(response.json()["detail"])
+                return PetroDBProject(self._db, project=response.json())
+            raise APIError(response.json().get("detail", "Project not found"))
         else:
-            response = self.__db.get("/projects/")
+            response = self._db.get("/projects/")
             if response.ok:
-                return [PetroDBProject(self.__db, project=p) for p in response.json()]
-            else:
-                raise ValueError(response.json()["detail"])
+                return [PetroDBProject(self._db, project=p) for p in response.json()]
+            raise APIError(response.json().get("detail", "Projects not found"))
 
     def create_project(self, name: str, description: str = ""):
         """Create project in database
@@ -130,15 +203,17 @@ class PetroDB:
             Created project instance.
 
         Raises:
-            ValueError: If project was not created.
+            APIError: If project was not created.
 
         """
         data = {"name": name, "description": description}
-        response = self.__db.post("/project/", data)
+        response = self._db.post("/project/", data)
         if response.ok:
-            return PetroDBProject(self.__db, project=response.json())
-        else:
-            raise ValueError(response.json()["detail"])
+            return PetroDBProject(self._db, project=response.json())
+        raise APIError(response.json().get("detail", "Project not created"))
+
+
+# ── entity classes ──────────────────────────────────────────────────────
 
 
 class PetroDBProject:
@@ -149,30 +224,30 @@ class PetroDBProject:
 
     """
 
-    def __init__(self, db, project):
-        self.__db = db
-        self.__project_id = project.pop("id")
-        self.data = project
+    def __init__(self, db: PetroAPI, project: dict):
+        self._db = db
+        self.data = dict(project)
+        self._project_id: int = self.data.pop("id")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.name}"
 
     @property
-    def name(self):
+    def name(self) -> str:
         """str: Name of the project."""
         return self.data["name"]
 
     @name.setter
-    def name(self, name: str):
+    def name(self, name: str) -> None:
         self.data["name"] = name
 
     @property
-    def description(self):
+    def description(self) -> str:
         """str: Description of the project."""
         return self.data["description"]
 
     @description.setter
-    def description(self, desc: str):
+    def description(self, desc: str) -> None:
         self.data["description"] = desc
 
     def samples(self, name: str | None = None):
@@ -185,26 +260,22 @@ class PetroDBProject:
             Sample instance or list of all samples if the name is not provided.
 
         Raises:
-            ValueError: If sample(s) was not found.
+            APIError: If sample(s) was not found.
 
         """
         if name is not None:
-            response = self.__db.get(f"/search/sample/{self.__project_id}/{name}")
+            response = self._db.get(f"/search/sample/{self._project_id}/{name}")
             if response.ok:
-                return PetroDBSample(
-                    self.__db, self.__project_id, sample=response.json()
-                )
-            else:
-                raise ValueError(response.json()["detail"])
+                return PetroDBSample(self._db, self._project_id, sample=response.json())
+            raise APIError(response.json().get("detail", "Sample not found"))
         else:
-            response = self.__db.get(f"/samples/{self.__project_id}")
+            response = self._db.get(f"/samples/{self._project_id}")
             if response.ok:
                 return [
-                    PetroDBSample(self.__db, self.__project_id, sample=s)
+                    PetroDBSample(self._db, self._project_id, sample=s)
                     for s in response.json()
                 ]
-            else:
-                raise ValueError(response.json()["detail"])
+            raise APIError(response.json().get("detail", "Samples not found"))
 
     def create_sample(self, name: str, description: str = ""):
         """Create project in database
@@ -217,31 +288,28 @@ class PetroDBProject:
             Created sample instance.
 
         Raises:
-            ValueError: If sample was not created.
+            APIError: If sample was not created.
 
         """
         data = {"name": name, "description": description}
-        response = self.__db.post(f"/sample/{self.__project_id}", data)
+        response = self._db.post(f"/sample/{self._project_id}", data)
         if response.ok:
-            return PetroDBSample(self.__db, self.__project_id, sample=response.json())
-        else:
-            raise ValueError(response.json()["detail"])
+            return PetroDBSample(self._db, self._project_id, sample=response.json())
+        raise APIError(response.json().get("detail", "Sample not created"))
 
-    def delete(self):
+    def delete(self) -> dict:
         """Delete project from database. Use with caution!"""
-        response = self.__db.delete(f"/project/{self.__project_id}")
+        response = self._db.delete(f"/project/{self._project_id}")
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Project not deleted"))
 
-    def update(self):
+    def update(self) -> dict:
         """Update project in database according to the data attribute."""
-        response = self.__db.put(f"/project/{self.__project_id}", self.data)
+        response = self._db.put(f"/project/{self._project_id}", self.data)
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Project not updated"))
 
     @property
     def spots(self):
@@ -253,7 +321,7 @@ class PetroDBProject:
                 s = sample.spots
                 records = records | s.records
                 names += s.sample
-            except ValueError:
+            except APIError:
                 pass
         return PetroDBSpotRecords(records, names)
 
@@ -267,11 +335,11 @@ class PetroDBProject:
                 s = sample.areas
                 records = records | s.records
                 names += s.sample
-            except ValueError:
+            except APIError:
                 pass
         return PetroDBAreaRecords(records, names)
 
-    def mineral_data(self, mineral: str):
+    def mineral_data(self, mineral: str) -> pd.DataFrame:
         """Return spots and profile spots of given mineral dataframe"""
         res = []
         samples = self.samples()
@@ -287,38 +355,36 @@ class PetroDBProject:
                 res.append(spots)
         if res:
             return pd.concat(res)
-        else:
-            raise ValueError("No data found.")
+        raise NotFoundError("No data found.")
 
-    def add_user(self, username: str):
+    def add_user(self, username: str) -> dict:
         """Add access to the project to user
 
         Args:
             username (str): username
 
         """
-        response = self.__db.put(
-            f"/project/{self.__project_id}/adduser", {"username": username}
+        response = self._db.put(
+            f"/project/{self._project_id}/adduser", {"username": username}
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "User not added"))
 
-    def remove_user(self, username: str):
+    def remove_user(self, username: str) -> dict:
         """Remove access to the project for user
 
         Args:
             username (str): username
 
         """
-        response = self.__db.put(
-            f"/project/{self.__project_id}/removeuser", {"username": username}
+        response = self._db.put(
+            f"/project/{self._project_id}/removeuser",
+            {"username": username},
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "User not removed"))
 
 
 class PetroDBSample:
@@ -329,47 +395,46 @@ class PetroDBSample:
 
     """
 
-    def __init__(self, db, project_id, sample):
-        self.__db = db
-        self.__project_id = project_id
-        self.__sample_id = sample.pop("id")
-        self.data = sample
+    def __init__(self, db: PetroAPI, project_id: int, sample: dict):
+        self._db = db
+        self._project_id = project_id
+        self.data = dict(sample)
+        self._sample_id: int = self.data.pop("id")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.name}"
 
     @property
-    def name(self):
+    def name(self) -> str:
         """str: Name of the sample."""
         return self.data["name"]
 
     @name.setter
-    def name(self, name: str):
+    def name(self, name: str) -> None:
         self.data["name"] = name
 
     @property
-    def description(self):
+    def description(self) -> str:
         """str: Description of the sample."""
         return self.data["description"]
 
     @description.setter
-    def description(self, desc: str):
+    def description(self, desc: str) -> None:
         self.data["description"] = desc
 
     @cached_property
     def spots(self):
         """Spots accessor"""
-        response = self.__db.get(f"/spots/{self.__project_id}/{self.__sample_id}")
+        response = self._db.get(f"/spots/{self._project_id}/{self._sample_id}")
         if response.ok:
             spots = {
                 res["id"]: PetroDBSpot(
-                    self.__db, self.__project_id, self.__sample_id, spot=res
+                    self._db, self._project_id, self._sample_id, spot=res
                 )
                 for res in response.json()
             }
             return PetroDBSpotRecords(spots, len(spots) * [self.name])
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Spots not found"))
 
     def spot(self, spot_id: int):
         """Get spot from database
@@ -381,18 +446,18 @@ class PetroDBSample:
             Spot instance.
 
         Raises:
-            ValueError: If spot was not found.
+            APIError: If spot was not found.
 
         """
-        response = self.__db.get(
-            f"/spot/{self.__project_id}/{self.__sample_id}/{spot_id}"
-        )
+        response = self._db.get(f"/spot/{self._project_id}/{self._sample_id}/{spot_id}")
         if response.ok:
             return PetroDBSpot(
-                self.__db, self.__project_id, self.__sample_id, spot=response.json()
+                self._db,
+                self._project_id,
+                self._sample_id,
+                spot=response.json(),
             )
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Spot not found"))
 
     def create_spot(
         self,
@@ -411,17 +476,19 @@ class PetroDBSample:
             Created spot instance.
 
         Raises:
-            ValueError: If spot was not created.
+            APIError: If spot was not created.
 
         """
         data = {"label": label, "mineral": mineral, "values": values}
-        response = self.__db.post(f"/spot/{self.__project_id}/{self.__sample_id}", data)
+        response = self._db.post(f"/spot/{self._project_id}/{self._sample_id}", data)
         if response.ok:
             return PetroDBSpot(
-                self.__db, self.__project_id, self.__sample_id, spot=response.json()
+                self._db,
+                self._project_id,
+                self._sample_id,
+                spot=response.json(),
             )
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Spot not created"))
 
     def create_spots(
         self,
@@ -442,7 +509,7 @@ class PetroDBSample:
             Created spots
 
         Raises:
-            ValueError: If spots were not created.
+            APIError: If spots were not created.
 
         """
         df = df.copy()
@@ -465,28 +532,30 @@ class PetroDBSample:
                     "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
-        response = self.__db.post(
-            f"/spots/{self.__project_id}/{self.__sample_id}", spots
-        )
+        response = self._db.post(f"/spots/{self._project_id}/{self._sample_id}", spots)
         if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+            spots = {
+                res["id"]: PetroDBSpot(
+                    self._db, self._project_id, self._sample_id, spot=res
+                )
+                for res in response.json()
+            }
+            return PetroDBSpotRecords(spots, len(spots) * [self.name])
+        raise APIError(response.json().get("detail", "Spots not created"))
 
     @cached_property
     def areas(self):
         """Areas accessor"""
-        response = self.__db.get(f"/areas/{self.__project_id}/{self.__sample_id}")
+        response = self._db.get(f"/areas/{self._project_id}/{self._sample_id}")
         if response.ok:
             areas = {
                 res["id"]: PetroDBArea(
-                    self.__db, self.__project_id, self.__sample_id, area=res
+                    self._db, self._project_id, self._sample_id, area=res
                 )
                 for res in response.json()
             }
             return PetroDBAreaRecords(areas, len(areas) * [self.name])
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Areas not found"))
 
     def area(self, area_id: int):
         """Get area from database
@@ -498,18 +567,18 @@ class PetroDBSample:
             Area instance.
 
         Raises:
-            ValueError: If area was not found.
+            APIError: If area was not found.
 
         """
-        response = self.__db.get(
-            f"/area/{self.__project_id}/{self.__sample_id}/{area_id}"
-        )
+        response = self._db.get(f"/area/{self._project_id}/{self._sample_id}/{area_id}")
         if response.ok:
             return PetroDBArea(
-                self.__db, self.__project_id, self.__sample_id, area=response.json()
+                self._db,
+                self._project_id,
+                self._sample_id,
+                area=response.json(),
             )
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Area not found"))
 
     def create_area(self, label: str, values: dict):
         """Create area in database
@@ -522,17 +591,19 @@ class PetroDBSample:
             Created area instance.
 
         Raises:
-            ValueError: If area was not created.
+            APIError: If area was not created.
 
         """
         data = {"label": label, "values": values}
-        response = self.__db.post(f"/area/{self.__project_id}/{self.__sample_id}", data)
+        response = self._db.post(f"/area/{self._project_id}/{self._sample_id}", data)
         if response.ok:
             return PetroDBArea(
-                self.__db, self.__project_id, self.__sample_id, area=response.json()
+                self._db,
+                self._project_id,
+                self._sample_id,
+                area=response.json(),
             )
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Area not created"))
 
     def create_areas(
         self,
@@ -550,7 +621,7 @@ class PetroDBSample:
             Created areas
 
         Raises:
-            ValueError: If areas were not created.
+            APIError: If areas were not created.
 
         """
         df = df.copy()
@@ -567,15 +638,16 @@ class PetroDBSample:
                     "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
-        response = self.__db.post(
-            f"/areas/{self.__project_id}/{self.__sample_id}", areas
-        )
+        response = self._db.post(f"/areas/{self._project_id}/{self._sample_id}", areas)
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Areas not created"))
 
-    def profiles(self, label: str | None = None, mineral: str | None = None):
+    def profiles(
+        self,
+        label: str | None = None,
+        mineral: str | None = None,
+    ):
         """Get profile from database
 
         Args:
@@ -585,48 +657,44 @@ class PetroDBSample:
             Profile instance or list of all profiles if the label is not provided.
 
         Raises:
-            ValueError: If profile(s) was not found.
+            APIError: If profile(s) was not found.
 
         """
         if label is not None:
-            response = self.__db.get(
-                f"/search/profile/{self.__project_id}/{self.__sample_id}/{label}"
+            response = self._db.get(
+                f"/search/profile/{self._project_id}/{self._sample_id}/{label}"
             )
             if response.ok:
                 data = response.json()
                 if mineral is not None:
                     if data["mineral"] == mineral:
                         return PetroDBProfile(
-                            self.__db,
-                            self.__project_id,
-                            self.__sample_id,
+                            self._db,
+                            self._project_id,
+                            self._sample_id,
                             self.name,
                             profile=response.json(),
                         )
-                    else:
-                        raise ValueError(
-                            f"Profile with {label=} and {mineral=} not found."
-                        )
+                    raise NotFoundError(
+                        f"Profile with {label=} and {mineral=} not found."
+                    )
                 return PetroDBProfile(
-                    self.__db,
-                    self.__project_id,
-                    self.__sample_id,
+                    self._db,
+                    self._project_id,
+                    self._sample_id,
                     self.name,
                     profile=response.json(),
                 )
-            else:
-                raise ValueError(response.json()["detail"])
+            raise APIError(response.json().get("detail", "Profile not found"))
         else:
-            response = self.__db.get(
-                f"/profiles/{self.__project_id}/{self.__sample_id}"
-            )
+            response = self._db.get(f"/profiles/{self._project_id}/{self._sample_id}")
             if response.ok:
                 if mineral is not None:
                     return [
                         PetroDBProfile(
-                            self.__db,
-                            self.__project_id,
-                            self.__sample_id,
+                            self._db,
+                            self._project_id,
+                            self._sample_id,
                             self.name,
                             profile=p,
                         )
@@ -636,16 +704,15 @@ class PetroDBSample:
                 else:
                     return [
                         PetroDBProfile(
-                            self.__db,
-                            self.__project_id,
-                            self.__sample_id,
+                            self._db,
+                            self._project_id,
+                            self._sample_id,
                             self.name,
                             profile=p,
                         )
                         for p in response.json()
                     ]
-            else:
-                raise ValueError(response.json()["detail"])
+            raise APIError(response.json().get("detail", "Profiles not found"))
 
     def create_profile(self, label: str, mineral: str):
         """Create profile in database
@@ -658,48 +725,41 @@ class PetroDBSample:
             Created profile instance.
 
         Raises:
-            ValueError: If profile was not created.
+            APIError: If profile was not created.
 
         """
         data = {"label": label, "mineral": mineral}
-        response = self.__db.post(
-            f"/profile/{self.__project_id}/{self.__sample_id}", data
-        )
+        response = self._db.post(f"/profile/{self._project_id}/{self._sample_id}", data)
         if response.ok:
             return PetroDBProfile(
-                self.__db,
-                self.__project_id,
-                self.__sample_id,
+                self._db,
+                self._project_id,
+                self._sample_id,
                 self.name,
                 profile=response.json(),
             )
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Profile not created"))
 
-    def delete(self):
+    def delete(self) -> dict:
         """Delete sample from database. Use with caution!"""
-        response = self.__db.delete(f"/sample/{self.__project_id}/{self.__sample_id}")
+        response = self._db.delete(f"/sample/{self._project_id}/{self._sample_id}")
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Sample not deleted"))
 
-    def update(self):
+    def update(self) -> dict:
         """Update sample in database according to the data attribute."""
-        response = self.__db.put(
-            f"/sample/{self.__project_id}/{self.__sample_id}", self.data
+        response = self._db.put(
+            f"/sample/{self._project_id}/{self._sample_id}", self.data
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Sample not updated"))
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset cached properties spots and areas to access updated data"""
-        if "spots" in self.__dict__:
-            self.__dict__["spots"]
-        if "areas" in self.__dict__:
-            self.__dict__["areas"]
+        self.__dict__.pop("spots", None)
+        self.__dict__.pop("areas", None)
 
     @property
     def profilespots(self):
@@ -710,11 +770,11 @@ class PetroDBSample:
                 s = profile.spots
                 records = records | s.records
                 names += s.sample
-            except ValueError:
+            except APIError:
                 pass
-        return PetroDBProfilespotRecords(records, names)
+        return PetroDBProfileSpotRecords(records, names)
 
-    def mineral_data(self, mineral: str):
+    def mineral_data(self, mineral: str) -> pd.DataFrame:
         """Return spots and profile spots of given mineral dataframe"""
         res = []
         spots = self.spots.df(mineral=mineral, sample_name=True)
@@ -728,8 +788,7 @@ class PetroDBSample:
             res.append(spots)
         if res:
             return pd.concat(res)
-        else:
-            raise ValueError("No data found.")
+        raise NotFoundError("No data found.")
 
 
 class PetroDBSpot:
@@ -740,54 +799,52 @@ class PetroDBSpot:
 
     """
 
-    def __init__(self, db, project_id, sample_id, spot):
-        self.__db = db
-        self.__project_id = project_id
-        self.__sample_id = sample_id
-        self.__spot_id = spot.pop("id")
-        self.data = spot
+    def __init__(self, db: PetroAPI, project_id: int, sample_id: int, spot: dict):
+        self._db = db
+        self._project_id = project_id
+        self._sample_id = sample_id
+        self.data = dict(spot)
+        self._spot_id: int = self.data.pop("id")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.label} ({self.mineral})"
 
     @property
-    def label(self):
+    def label(self) -> str:
         """str: Label of the spot."""
         return self.data["label"]
 
     @label.setter
-    def label(self, lbl: str):
+    def label(self, lbl: str) -> None:
         self.data["label"] = lbl
 
     @property
-    def mineral(self):
+    def mineral(self) -> str:
         """str: Mineral of the spot."""
         return self.data["mineral"]
 
     @mineral.setter
-    def mineral(self, m: str):
+    def mineral(self, m: str) -> None:
         self.data["mineral"] = m
 
-    def delete(self):
+    def delete(self) -> dict:
         """Delete spot from database. Use with caution!"""
-        response = self.__db.delete(
-            f"/spot/{self.__project_id}/{self.__sample_id}/{self.__spot_id}"
+        response = self._db.delete(
+            f"/spot/{self._project_id}/{self._sample_id}/{self._spot_id}"
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Spot not deleted"))
 
-    def update(self):
+    def update(self) -> dict:
         """Update spot in database according to the data attribute."""
-        response = self.__db.put(
-            f"/spot/{self.__project_id}/{self.__sample_id}/{self.__spot_id}",
+        response = self._db.put(
+            f"/spot/{self._project_id}/{self._sample_id}/{self._spot_id}",
             self.data,
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Spot not updated"))
 
 
 class PetroDBArea:
@@ -798,45 +855,43 @@ class PetroDBArea:
 
     """
 
-    def __init__(self, db, project_id, sample_id, area):
-        self.__db = db
-        self.__project_id = project_id
-        self.__sample_id = sample_id
-        self.__area_id = area.pop("id")
-        self.data = area
+    def __init__(self, db: PetroAPI, project_id: int, sample_id: int, area: dict):
+        self._db = db
+        self._project_id = project_id
+        self._sample_id = sample_id
+        self.data = dict(area)
+        self._area_id: int = self.data.pop("id")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.label}"
 
     @property
-    def label(self):
+    def label(self) -> str:
         """str: Label of the area."""
         return self.data["label"]
 
     @label.setter
-    def label(self, lbl: str):
+    def label(self, lbl: str) -> None:
         self.data["label"] = lbl
 
-    def delete(self):
+    def delete(self) -> dict:
         """Delete area from database. Use with caution!"""
-        response = self.__db.delete(
-            f"/area/{self.__project_id}/{self.__sample_id}/{self.__area_id}"
+        response = self._db.delete(
+            f"/area/{self._project_id}/{self._sample_id}/{self._area_id}"
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Area not deleted"))
 
-    def update(self):
+    def update(self) -> dict:
         """Update area in database according to the data attribute."""
-        response = self.__db.put(
-            f"/area/{self.__project_id}/{self.__sample_id}/{self.__area_id}",
+        response = self._db.put(
+            f"/area/{self._project_id}/{self._sample_id}/{self._area_id}",
             self.data,
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Area not updated"))
 
 
 class PetroDBProfile:
@@ -848,48 +903,55 @@ class PetroDBProfile:
 
     """
 
-    def __init__(self, db, project_id, sample_id, samplename, profile):
-        self.__db = db
-        self.__project_id = project_id
-        self.__sample_id = sample_id
+    def __init__(
+        self,
+        db: PetroAPI,
+        project_id: int,
+        sample_id: int,
+        samplename: str,
+        profile: dict,
+    ):
+        self._db = db
+        self._project_id = project_id
+        self._sample_id = sample_id
         self.samplename = samplename
-        self.__profile_id = profile.pop("id")
-        self.data = profile
+        self.data = dict(profile)
+        self._profile_id: int = self.data.pop("id")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.label} ({self.mineral})"
 
     @property
-    def label(self):
+    def label(self) -> str:
         """str: Label of the profile."""
         return self.data["label"]
 
     @label.setter
-    def label(self, lbl: str):
+    def label(self, lbl: str) -> None:
         self.data["label"] = lbl
 
     @property
-    def mineral(self):
+    def mineral(self) -> str:
         """str: Mineral of the profile."""
         return self.data["mineral"]
 
     @mineral.setter
-    def mineral(self, m: str):
+    def mineral(self, m: str) -> None:
         self.data["mineral"] = m
 
     @cached_property
     def spots(self):
         """Profile spots accessor"""
-        response = self.__db.get(
-            f"/profilespots/{self.__project_id}/{self.__sample_id}/{self.__profile_id}"
+        response = self._db.get(
+            f"/profilespots/{self._project_id}/{self._sample_id}/{self._profile_id}"
         )
         if response.ok:
             spots = {
                 res["id"]: PetroDBProfileSpot(
-                    self.__db,
-                    self.__project_id,
-                    self.__sample_id,
-                    self.__profile_id,
+                    self._db,
+                    self._project_id,
+                    self._sample_id,
+                    self._profile_id,
                     spot=res,
                 )
                 for res in response.json()
@@ -897,9 +959,8 @@ class PetroDBProfile:
             for k in spots:
                 spots[k].data["label"] = self.label
                 spots[k].data["mineral"] = self.mineral
-            return PetroDBProfilespotRecords(spots, len(spots) * [self.samplename])
-        else:
-            raise ValueError(response.json()["detail"])
+            return PetroDBProfileSpotRecords(spots, len(spots) * [self.samplename])
+        raise APIError(response.json().get("detail", "Profile spots not found"))
 
     def spot(self, spot_id: int):
         """Get profile spot from database
@@ -911,16 +972,22 @@ class PetroDBProfile:
             Profile spot instance.
 
         Raises:
-            ValueError: If profile spot was not found.
+            APIError: If profile spot was not found.
 
         """
-        response = self.__db.get(
-            f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}/{spot_id}"
+        response = self._db.get(
+            f"/profilespot/{self._project_id}/{self._sample_id}"
+            f"/{self._profile_id}/{spot_id}"
         )
         if response.ok:
-            return PetroDBProfileSpot(spot=response.json(), **self._kwargs)
-        else:
-            raise ValueError(response.json()["detail"])
+            return PetroDBProfileSpot(
+                self._db,
+                self._project_id,
+                self._sample_id,
+                self._profile_id,
+                spot=response.json(),
+            )
+        raise APIError(response.json().get("detail", "Profile spot not found"))
 
     def create_spot(self, index: int, values: dict):
         """Create profile spot in database
@@ -933,30 +1000,36 @@ class PetroDBProfile:
             Created profile spot instance.
 
         Raises:
-            ValueError: If profile spot was not created.
+            APIError: If profile spot was not created.
 
         """
         data = {"index": index, "values": values}
-        response = self.__db.post(
-            f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}",
+        response = self._db.post(
+            f"/profilespot/{self._project_id}/{self._sample_id}/{self._profile_id}",
             data,
         )
         if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+            return PetroDBProfileSpot(
+                self._db,
+                self._project_id,
+                self._sample_id,
+                self._profile_id,
+                spot=response.json(),
+            )
+        raise APIError(response.json().get("detail", "Profile spot not created"))
 
     def create_spots(self, df: pd.DataFrame):
         """Create profile spots in database from pandas dataframe
 
         Args:
-            df (pandas.DataFrame): data values, index must be numeric and is used to define order
+            df (pandas.DataFrame): data values, index must be numeric and is used
+                to define order
 
         Returns:
             Created profile spots
 
         Raises:
-            ValueError: If profile spots were not created.
+            APIError: If profile spots were not created.
 
         """
         df = df.copy()
@@ -968,40 +1041,49 @@ class PetroDBProfile:
                     "values": row.apply(zero_negative_nan).dropna().to_dict(),
                 }
             )
-        response = self.__db.post(
-            f"/profilespots/{self.__project_id}/{self.__sample_id}/{self.__profile_id}",
+        response = self._db.post(
+            f"/profilespots/{self._project_id}/{self._sample_id}/{self._profile_id}",
             profilespots,
         )
         if response.ok:
-            return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+            spots = {
+                res["id"]: PetroDBProfileSpot(
+                    self._db,
+                    self._project_id,
+                    self._sample_id,
+                    self._profile_id,
+                    spot=res,
+                )
+                for res in response.json()
+            }
+            for k in spots:
+                spots[k].data["label"] = self.label
+                spots[k].data["mineral"] = self.mineral
+            return PetroDBProfileSpotRecords(spots, len(spots) * [self.samplename])
+        raise APIError(response.json().get("detail", "Profile spots not created"))
 
-    def delete(self):
+    def delete(self) -> dict:
         """Delete profile from database. Use with caution!"""
-        response = self.__db.delete(
-            f"/profile/{self.__project_id}/{self.__sample_id}/{self.__profile_id}"
+        response = self._db.delete(
+            f"/profile/{self._project_id}/{self._sample_id}/{self._profile_id}"
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Profile not deleted"))
 
-    def update(self):
+    def update(self) -> dict:
         """Update profile in database according to the data attribute."""
-        response = self.__db.put(
-            f"/profile/{self.__project_id}/{self.__sample_id}/{self.__profile_id}",
+        response = self._db.put(
+            f"/profile/{self._project_id}/{self._sample_id}/{self._profile_id}",
             self.data,
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Profile not updated"))
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset cached property spots to access updated data"""
-        if "spots" in self.__dict__:
-            self.__dict__["spots"]
+        self.__dict__.pop("spots", None)
 
 
 class PetroDBProfileSpot:
@@ -1012,46 +1094,56 @@ class PetroDBProfileSpot:
 
     """
 
-    def __init__(self, db, project_id, sample_id, profile_id, spot):
-        self.__db = db
-        self.__project_id = project_id
-        self.__sample_id = sample_id
-        self.__profile_id = profile_id
-        self.__profilespot_id = spot.pop("id")
-        self.data = spot
+    def __init__(
+        self,
+        db: PetroAPI,
+        project_id: int,
+        sample_id: int,
+        profile_id: int,
+        spot: dict,
+    ):
+        self._db = db
+        self._project_id = project_id
+        self._sample_id = sample_id
+        self._profile_id = profile_id
+        self.data = dict(spot)
+        self._profilespot_id: int = self.data.pop("id")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Spot {self.index}"
 
     @property
-    def index(self):
+    def index(self) -> int:
         """int: Index of the profile spot."""
         return self.data["index"]
 
     @index.setter
-    def index(self, idx: int):
+    def index(self, idx: int) -> None:
         self.data["index"] = idx
 
-    def delete(self):
+    def delete(self) -> dict:
         """Delete profile spot from database. Use with caution!"""
-        response = self.__db.delete(
-            f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}/{self.__profilespot_id}"
+        response = self._db.delete(
+            f"/profilespot/{self._project_id}/{self._sample_id}"
+            f"/{self._profile_id}/{self._profilespot_id}"
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Profile spot not deleted"))
 
-    def update(self):
+    def update(self) -> dict:
         """Update profile spot in database according to the data attribute."""
-        response = self.__db.put(
-            f"/profilespot/{self.__project_id}/{self.__sample_id}/{self.__profile_id}/{self.__profilespot_id}",
+        response = self._db.put(
+            f"/profilespot/{self._project_id}/{self._sample_id}"
+            f"/{self._profile_id}/{self._profilespot_id}",
             self.data,
         )
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Profile spot not updated"))
+
+
+# ── records collections ─────────────────────────────────────────────────
 
 
 class PetroDBRecords:
@@ -1060,17 +1152,17 @@ class PetroDBRecords:
     def __init__(self, records: dict, sample: list):
         self.records = records
         self.sample = sample
-        self.cols = []
+        self.cols: list[str] = []
 
     def __getitem__(self, id: int):
         if isinstance(id, int):
             return self.records[id]
 
-    def df(self, **kwargs):
+    def df(self, **kwargs) -> pd.DataFrame:
         """Get records as pandas dataframe
 
-        Note: Keyword arguments `col=val` are used to select records with given value.
-            `col` must be on of the available columns in attribute cols.
+        Note: Keyword arguments `col=val` are used to select records with given
+            value. `col` must be on of the available columns in attribute cols.
 
         Attributes:
             cols (list): list of attributes for selection
@@ -1093,7 +1185,7 @@ class PetroDBSpotRecords(PetroDBRecords):
         super().__init__(records, sample)
         self.cols = ["label", "mineral"]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{len(self.records)} spots"
 
 
@@ -1102,35 +1194,47 @@ class PetroDBAreaRecords(PetroDBRecords):
         super().__init__(records, sample)
         self.cols = ["label"]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{len(self.records)} areas"
 
 
-class PetroDBProfilespotRecords(PetroDBRecords):
+class PetroDBProfileSpotRecords(PetroDBRecords):
     def __init__(self, records: dict, sample: list):
         super().__init__(records, sample)
         self.cols = ["label", "mineral"]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{len(self.records)} profile spots"
+
+
+# backward compatibility alias
+PetroDBProfilespotRecords = PetroDBProfileSpotRecords
+
+
+# ── admin ────────────────────────────────────────────────────────────────
 
 
 class PetroDBAdmin:
     """Admin client for postresql petrodb database API."""
 
-    def __init__(self, api_url, username, password):
-        self.__db = PetroAPI(api_url, username, password)
+    def __init__(self, api_url: str, username: str, password: str, timeout: int = 30):
+        self._db = PetroAPI(api_url, username, password, timeout)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self._db._session.close()
 
     # ---------- USERS
 
     def users(self, name: str | None = None):
-        response = self.__db.get("/users/")
+        response = self._db.get("/users/")
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "Users not found"))
 
-    def create_user(self, username: str, password: str, email: str):
+    def create_user(self, username: str, password: str, email: str) -> dict:
         """Create user in database
 
         Args:
@@ -1140,8 +1244,7 @@ class PetroDBAdmin:
 
         """
         data = {"username": username, "password": password, "email": email}
-        response = self.__db.post("/user/", data)
+        response = self._db.post("/user/", data)
         if response.ok:
             return response.json()
-        else:
-            raise ValueError(response.json()["detail"])
+        raise APIError(response.json().get("detail", "User not created"))
