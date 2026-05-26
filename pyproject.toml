@@ -19,6 +19,7 @@ dependencies = [
     "pyparsing",
     "xlrd",
     "openpyxl",
+    "jinja2",
     "periodictable",
     "mpltern",
 ]
