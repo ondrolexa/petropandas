@@ -222,6 +222,31 @@ class PetroPlotsAccessor:
     def __init__(self, pandas_obj):
         self._obj = pandas_obj
 
+    def pairplot(self, columns, **kwargs):
+        """Paiplot of data.
+
+        Note: All keywords except further listed are passed to seaborn pairplot.
+
+        Keyword Args:
+            columns (list): Columns to be used in pairplot
+            title (str, optional): Title of the plot. Default None
+            filename (str, optional): If not none, plot is saved to file. Default None.
+            dpi (int, optional): DPI used for `savefig`. Default 150.
+        """
+        title = kwargs.pop("title", None)
+        filename = kwargs.pop("filename", None)
+        dpi = kwargs.pop("dpi", 150)
+        data = self._obj[columns].copy()
+
+        g = sns.pairplot(data, **kwargs)
+        if title is not None:
+            g.fig.suptitle(title)
+        if filename is not None:
+            g.fig.savefig(filename, dpi=dpi)
+            plt.close(g.fig)
+        else:
+            plt.show()
+
     def profile(self, *args, **kwargs):
         """Create line plots from columns, e.g. garnet profiles
 
@@ -793,7 +818,7 @@ class AccessorTemplate:
     def plot(self, **kwargs):
         """Paiplot of data.
 
-        Notes: All keywords except further listed are passed to seaborn pairplot.
+        Note: All keywords except further listed are passed to seaborn pairplot.
             Use all accessor valid columns or columns provided in `vars`
 
         Keyword Args:
@@ -1583,10 +1608,13 @@ class REEAccessor(AccessorTemplate):
         return self._final(res, **kwargs)
 
     def plot(self, **kwargs):
-        """Spiderplot of REE data.
+        """Spiderplot of REE data normalized by reservoir.
 
         Note:
-            List of REE used for plot could be set in `config["ree_plot"]`
+            List of REE used for plot could be set in `config["ree_plot"]`.
+            Predefined reservoirs are imported from
+            [GERM Reservoir Database](https://earthref.org/GERMRD/reservoirs/). You can
+            check all available reservoirs in `config["reservoirs"]`.
 
         Keyword Args:
             grouped (bool): When True aggegated data with confidence interval is drawn.
@@ -1603,6 +1631,9 @@ class REEAccessor(AccessorTemplate):
             dpi (int): DPI used for `savefig`. Default 150.
             keep (list): list of additional columns to be included. Default [].
             dropna (bool): whether to drop columns with NA only. Default True
+            reservoir (str): Name of reservoir. Deafult "CI Chondrites"
+            reference (str): Reference. Default "McDonough & Sun 1995"
+            source (str): Original source. Deafult same as reference.
         """
         fig, ax = plt.subplots()
         ndf = self.normalize(**kwargs)
@@ -1623,6 +1654,7 @@ class REEAccessor(AccessorTemplate):
                 palette=kwargs.get("palette", None),
                 errorbar="ci",
                 legend=kwargs.get("legend", "brief"),
+                style=kwargs.get("style", None),
                 ax=ax,
             )
         else:
@@ -1635,6 +1667,7 @@ class REEAccessor(AccessorTemplate):
                 units=ree.index,
                 estimator=None,
                 legend=kwargs.get("legend", "brief"),
+                style=kwargs.get("style", None),
                 ax=ax,
             )
         if kwargs.get("boxplot", False):
