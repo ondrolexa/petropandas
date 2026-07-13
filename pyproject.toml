@@ -1,35 +1,21 @@
 [project]
 name = "petropandas"
 dynamic = ["version"]
-description = "Pandas accessors for petrologists"
+description = "A pandas-accessor library for processing electron microprobe (EMPA) analyses"
 readme = "README.md"
-maintainers = [{ name = "Ondrej Lexa", email = "lexa.ondrej@gmail.com" }]
-requires-python = ">=3.10"
+authors = [
+    { name = "Ondrej Lexa", email = "lexa.ondrej@gmail.com" }
+]
+keywords = ["metamorphic petrology", "mineral recalculations", "EPMA"]
+requires-python = ">=3.12"
 license = "MIT"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
-    "License :: OSI Approved :: MIT License",
-]
+license-files = ["LICENSE"]
 dependencies = [
-    "numpy",
-    "matplotlib",
-    "pandas",
-    "seaborn",
-    "pyparsing",
-    "xlrd",
-    "openpyxl",
-    "jinja2",
-    "periodictable",
-    "mpltern",
+    "pandas>=3.0.3",
+    "periodictable>=2.1.0",
+    "requests>=2.31",
+    "matplotlib>=3.7",
 ]
-
-[project.optional-dependencies]
-database = ["requests"]
-extra = ["jupyterlab"]
-tests = ["petropandas[database]", "pytest", "nbval"]
-docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]", "mkdocs-jupyter"]
-dev = ["petropandas[extra,tests,docs,database]", "black"]
 
 [project.urls]
 Homepage = "https://github.com/ondrolexa/petropandas"
@@ -37,25 +23,23 @@ Documentation = "https://petropandas.readthedocs.io"
 Repository = "https://github.com/ondrolexa/petropandas.git"
 Issues = "https://github.com/ondrolexa/petropandas/issues"
 
+[project.optional-dependencies]
+lab = ["jupyterlab"]
+docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]", "mkdocs-jupyter"]
+
+[dependency-groups]
+dev = [
+    "nbval>=0.11",
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
 [tool.hatch.version]
-path = "petropandas/__init__.py"
+path = "src/petropandas/__init__.py"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.black]
-line-length = 88
-
-[tool.isort]
-profile = "black"
-
 [tool.pytest.ini_options]
 testpaths = ["tests", "docs/notebooks"]
-
-[tool.pyright]
-venvPath = "."
-venv = ".venv"
-
-[tool.ruff]
-line-length = 88

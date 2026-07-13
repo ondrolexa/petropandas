@@ -2,13 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.1.4 - 2026-07-13
+## [Unreleased]
+
+## [0.1.4] - 2026-07-13
 
 ### Added
-- dataframe kwarg added to petrosofware bulk calculations
+- dataframe kwarg added to petrosoftware bulk calculations
 - petroplots.profile autogrouping and autoscaling implemented
 
-## 0.1.3 - 2025-12-16
+## [0.1.3] - 2025-12-16
 
 ### Added
 
@@ -16,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - mbe added to MAGEMin
 - Garnet_TC added
 
-## 0.1.2 - 2025-11-27
+## [0.1.2] - 2025-11-27
 
 ### Added
 
@@ -32,6 +34,6 @@ All notable changes to this project will be documented in this file.
 - molprop method available for all accessors
 - oxides order could be defined in config
 
-## 0.1.1 - 2025-10-27
+## [0.1.1] - 2025-10-27
 
 - Initial release

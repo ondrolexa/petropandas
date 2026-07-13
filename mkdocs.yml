@@ -1,68 +1,81 @@
-site_name: petropandas
+site_name: petropandas documentation
 repo_url: https://github.com/ondrolexa/petropandas
-site_description: Pandas accessors for petrologists
+site_description: A pandas-accessor library for electron microprobe mineral analysis
 site_author: Ondrej Lexa
-edit_uri: edit/main/docs/
-repo_name: ondrolexa/petropandas
-copyright: Maintained by Ondrej Lexa.
-
-nav:
-  - Home: index.md
-  - Tutorial: notebooks/tutorial.ipynb
-  - Utilities: utils.md
-  - Accessor: accessors.md
-  - Plotting: plots.md
-  - Minerals: minerals.md
-  - PetroDB: database.md
-
-plugins:
-  - search
-  - mkdocs-jupyter:
-      execute: true
-      allow_errors: false
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            docstring_style: google
-            show_bases: false
-            inherited_members: true
-            members_order: source
-            group_by_category: true
 
 theme:
   name: material
-  features:
-    - search.suggest
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.prune
-    - toc.integrate
-  font:
-    text: Noto Sans Adlam Unjoined
-    code: Roboto Mono
+
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: white
-      accent: deep orange
+      primary: indigo
+      accent: indigo
       toggle:
-        icon: material/weather-sunny
-        name: Dark mode
+        icon: material/brightness-7
+        name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: black
-      accent: deep orange
+      primary: indigo
+      accent: indigo
       toggle:
-        icon: material/weather-night
-        name: Light mode
-  icon:
-    logo: fontawesome/solid/table
-    repo: fontawesome/brands/github
+        icon: material/brightness-4
+        name: Switch to system preference
+
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
 
 markdown_extensions:
   - admonition
   - toc:
       permalink: true
-  - pymdownx.arithmatex:
-      generic: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 3
+            members_order: source
+            docstring_style: google
+            separate_signature: true
+            merge_init_into_class: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+  - mkdocs-jupyter:
+      execute: false
+      include: ["*.ipynb"]
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Tutorial: notebooks/tutorial.ipynb
+  - API Reference:
+      - api/index.md
+      - Accessors: api/accessors.md
+      - Minerals: api/minerals.md
+      - Calculations: api/calc.md
+      - Plotting: api/plotting.md
+      - Database: api/database.md
