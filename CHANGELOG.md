@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## main
+## 0.1.4 - 2026-07-13
 
 ### Added
 - dataframe kwarg added to petrosofware bulk calculations
