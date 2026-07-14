@@ -64,14 +64,11 @@ plugins:
             merge_init_into_class: true
             show_symbol_type_heading: true
             show_symbol_type_toc: true
-  - mkdocs-jupyter:
-      execute: false
-      include: ["*.ipynb"]
 
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - Tutorial: notebooks/tutorial.ipynb
+  - Tutorial: tutorial.md
   - API Reference:
       - api/index.md
       - Accessors: api/accessors.md

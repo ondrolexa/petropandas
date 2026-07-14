@@ -32,5 +32,5 @@ t.show()
 ## Links
 
 - [Getting Started](getting-started.md) — Installation and first steps
-- [Tutorial](notebooks/tutorial.ipynb) — Hands-on walkthrough
+- [Tutorial](tutorial.md) — Hands-on walkthrough
 - [API Reference](api/index.md) — Complete API documentation

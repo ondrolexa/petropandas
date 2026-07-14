@@ -24,4 +24,4 @@ jobs:
               run: uv sync --dev
 
             - name: Run Python tests
-              run: uv run pytest --nbval
+              run: uv run pytest
