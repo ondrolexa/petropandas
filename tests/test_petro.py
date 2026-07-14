@@ -79,6 +79,27 @@ class TestMolesAccessor:
         assert "SiO2" in result.columns
 
 
+class TestMolesNormalized:
+    def test_sums_to_100(self, fe_pyroxene: pd.DataFrame) -> None:
+        result = fe_pyroxene.moles.normalized()
+        assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
+
+    def test_sets_attrs(self, fe_pyroxene: pd.DataFrame) -> None:
+        result = fe_pyroxene.moles.normalized()
+        assert result.attrs.get("petro_units") == "moles"
+
+    def test_from_wt(self, diopside: pd.DataFrame) -> None:
+        result = diopside.moles.normalized()
+        moles = diopside.moles()
+        expected = moles.div(moles.sum(axis=1), axis=0) * 100.0
+        pd.testing.assert_frame_equal(result, expected, check_like=True)
+
+    def test_from_moles_idempotent(self, fe_pyroxene: pd.DataFrame) -> None:
+        n1 = fe_pyroxene.moles.normalized()
+        n2 = n1.moles.normalized()
+        pd.testing.assert_frame_equal(n1, n2)
+
+
 # ---------------------------------------------------------------------------
 # OxidesAccessor roundtrips (df.oxides)
 # ---------------------------------------------------------------------------

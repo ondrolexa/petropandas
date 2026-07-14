@@ -139,9 +139,14 @@ class MineralAccessor:
         """Compute site allocations with hierarchical (site, cation) columns."""
         return mineral.site_allocations(self._obj, units=self._units())
 
-    def end_members(self, mineral: Mineral) -> pd.DataFrame:
-        """Compute end-member proportions for a mineral."""
-        return mineral.end_members(self._obj, units=self._units())
+    def end_members(self, mineral: Mineral, **kwargs: object) -> pd.DataFrame:
+        """Compute end-member proportions for a mineral.
+
+        Extra keyword arguments (e.g. ``order_parameters`` for hpxeos
+        ``Phase`` order-disorder variables) are forwarded to the mineral's
+        own ``end_members`` method.
+        """
+        return mineral.end_members(self._obj, units=self._units(), **kwargs)
 
     def check_stoichiometry(self, mineral: Mineral) -> pd.DataFrame:
         """Validate analysis against a mineral's ideal stoichiometry.
@@ -448,6 +453,20 @@ class OxidesAccessor:
         result.attrs["petro_units"] = "wt%"
         return result
 
+    def apatite_correction(self) -> pd.DataFrame:
+        """Remove CaO bound in apatite and zero P₂O₅.
+
+        Uses true fluorapatite stoichiometry Ca₅(PO₄)₃F (Ca:P = 5:3).
+        Useful before thermodynamic modelling where P-bearing phases
+        are absent or inaccurate.
+
+        Returns:
+            Corrected copy with reduced CaO and P₂O₅ = 0.
+        """
+        result = _calc.apatite_correction(self._obj)
+        result.attrs["petro_units"] = "wt%"
+        return result
+
     def select(
         self,
         arg: str | list | pd.Series,
@@ -538,6 +557,12 @@ class MolesAccessor:
             result = _calc.convert(oxide_wt, "moles")
         else:
             result = _calc.convert(self._obj, "moles", from_unit=units)
+        result.attrs["petro_units"] = "moles"
+        return result
+
+    def normalized(self) -> pd.DataFrame:
+        """Normalize moles to 100 mol%."""
+        result = _calc.normalize(self())
         result.attrs["petro_units"] = "moles"
         return result
 
@@ -663,18 +688,6 @@ class BulkAccessor:
             DataFrame with ratio columns.
         """
         return _calc.oxide_ratios(self._obj)
-
-    def apatite_correction(self) -> pd.DataFrame:
-        """Remove CaO bound in apatite and zero P₂O₅.
-
-        Uses true fluorapatite stoichiometry Ca₅(PO₄)₃F (Ca:P = 5:3).
-        Useful before thermodynamic modelling where P-bearing phases
-        are absent or inaccurate.
-
-        Returns:
-            Corrected copy with reduced CaO and P₂O₅ = 0.
-        """
-        return _calc.apatite_correction(self._obj)
 
     def mean(
         self, *, groupby: str | None = None, weights: str | None = None

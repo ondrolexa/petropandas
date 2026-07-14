@@ -34,10 +34,10 @@ Re-order columns in standard petrological order (SiO₂ first, volatiles last):
 df.oxides.sorted()
 ```
 
-Select rows by searchin for "g-" in column "Comment":
+Select rows by searching for "Garnet" in column "Mineral":
 
 ```python
-g = df.oxides.select("g-", on="Comment")
+g = df.oxides.select("Garnet", on="Mineral")
 ```
 
 Compute element APFU with Fe³⁺/Fe²⁺ splitting for garnet (12 oxygens):
@@ -89,7 +89,23 @@ Returns a DataFrame of 0–1 scores per criterion (1 = perfect fit).
 
 \* Chlorite uses 28-charge normalization (n_oxygens=14 effective).
 
-THERMOCALC solution model instances (`TC_g`, `TC_pl4tr`, `TC_k4tr`, `TC_ep`, `TC_cd`, `TC_ctd`, `TC_sp`, `TC_st`, `TC_chl`, `TC_bi`, `TC_mu`, `TC_ma`, `TC_dio`, `TC_opx`, `TC_ilmm`, `TC_sa`) are also available.
+THERMOCALC activity-composition (a-x) solution models are available through the
+`petropandas.hpxeos` subpackage, covering three real THERMOCALC axfiles —
+`hpxeos.metapelite`, `hpxeos.metabasite`, `hpxeos.igneous` — each exposing ready-to-use
+`TC_<abbreviation>` instances (e.g. `TC_g`, `TC_pl4tr`) alongside their `Phase` classes:
+
+```python
+from petropandas.hpxeos.metapelite import TC_g
+
+df.mineral.apfu(TC_g)
+df.mineral.site_allocations(TC_g)
+df.mineral.end_members(TC_g)
+df.mineral.check_stoichiometry(TC_g)
+```
+
+`Phase` subclasses with order-disorder variables (e.g. Biotite `Q`, Augite `Qfm`/`Qal`)
+accept an optional `order_parameters` dict, passed through
+`df.mineral.end_members(mineral, order_parameters={...})`.
 
 ## API reference
 
@@ -104,12 +120,14 @@ THERMOCALC solution model instances (`TC_g`, `TC_pl4tr`, `TC_k4tr`, `TC_ep`, `TC
 | `df.oxides.split_valence(elem, method, n_oxy, ideal_cat)` | Split element into low/high charge oxides (wt%) |
 | `df.oxides.oxidize(o_excess)` | Split FeO into FeO/Fe₂O₃ by excess oxygen (THERMOCALC) |
 | `df.oxides.reduce()` | Merge Fe₂O₃ back into FeO equivalent |
+| `df.oxides.apatite_correction()` | Remove CaO bound in apatite, zero P₂O₅ |
 
 ### MolesAccessor (`df.moles`)
 
 | Method | Description |
 |--------|-------------|
 | `df.moles()` | Return oxide columns as molar proportions |
+| `df.moles.normalized()` | Normalise molar proportions to sum to 100% |
 
 ### ApfuAccessor (`df.apfu`)
 
@@ -140,7 +158,6 @@ Chains work seamlessly: `df.oxides().moles().oxides()` roundtrips back to wt%.
 | `df.bulk.cipw()` | Simple CIPW normative mineralogy |
 | `df.bulk.alumina_saturation(classify=False)` | A/NK and A/CNK molar ratios; optional Shand classification |
 | `df.bulk.oxide_ratios()` | Common ratios (Mg#, FeOT, total alkalis, K/Na, etc.) |
-| `df.bulk.apatite_correction()` | Remove CaO bound in apatite, zero P₂O₅ |
 | `df.bulk.TCbulk(*, system, ...)` | THERMOCALC bulk script output |
 | `df.bulk.Perplexbulk(*, system, ...)` | PerpleX thermodynamic component list output |
 | `df.bulk.MAGEMin(*, db, ...)` | MAGEMin bulk input file output |

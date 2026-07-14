@@ -20,14 +20,9 @@ src = res.joinpath("minerals.csv")
 with importlib.resources.as_file(src) as f:
     minerals = pd.read_csv(f)
 
-src = res.joinpath("pyroxenes.csv")
-with importlib.resources.as_file(src) as f:
-    pyroxenes = pd.read_csv(f)
-
 __all__ = [
     "avgpelite",
     "bulk",
     "grt_profile",
     "minerals",
-    "pyroxenes",
 ]

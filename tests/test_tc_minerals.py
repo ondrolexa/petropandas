@@ -1,16 +1,15 @@
-"""Tests for THERMOCALC-compatible mineral end-member calculations."""
+"""Tests for THERMOCALC a-x solution models (petropandas.hpxeos)."""
 
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from petropandas._minerals import (
+from petropandas.hpxeos.metapelite import (
     TC_bi,
     TC_cd,
     TC_chl,
     TC_ctd,
-    TC_dio,
     TC_ep,
     TC_g,
     TC_ilmm,
@@ -23,6 +22,8 @@ from petropandas._minerals import (
     TC_sp,
     TC_st,
 )
+from petropandas.hpxeos.metabasite import TC_aug, TC_dio, TC_ol, TC_hb
+from petropandas.hpxeos.igneous import TC_g_W24
 
 
 def _sums_to_100(result: pd.DataFrame, tol: float = 0.01) -> None:
@@ -88,6 +89,47 @@ class TestTCGarnet:
     def test_mg_rich(self):
         r = GARNET_MG.mineral.end_members(TC_g)
         assert r["py"].iloc[0] > r["alm"].iloc[0]
+
+    def test_apfu_includes_z_site_cations(self):
+        """apfu() must not drop Si/Al even though hpxeos's own `sites` dict
+        (used internally for the a-x mixing model) omits the always-full Z
+        site -- site_definitions on the Phase subclass must be complete."""
+        apfu = GARNET_DF.mineral.apfu(TC_g)
+        assert "Si{4+}" in apfu.columns
+        assert apfu["Si{4+}"].iloc[0] > 2.5
+
+    def test_check_stoichiometry(self):
+        result = GARNET_DF.mineral.check_stoichiometry(TC_g)
+        assert (result.iloc[0] >= 0).all()
+        assert (result.iloc[0] <= 1).all()
+
+
+GARNET_IG_DF = pd.DataFrame(
+    {
+        "SiO2": [38.5],
+        "Al2O3": [22.1],
+        "Cr2O3": [0.0],
+        "TiO2": [0.0],
+        "FeO": [28.3],
+        "MgO": [5.2],
+        "CaO": [3.8],
+    }
+)
+
+
+class TestTCGarnetIgneous:
+    """g_W24 (Weller et al. 2024) has a different M1/M2 site model than the
+    metapelite/metabasite garnet -- no Mn, but Cr/Ti-bearing end-members
+    (andradite, knorringite, Ti-garnet) instead of spessartine/uvarovite."""
+
+    def test_columns(self):
+        _has_cols(
+            GARNET_IG_DF.mineral.end_members(TC_g_W24),
+            ["py", "alm", "gr", "andr", "knor", "tig"],
+        )
+
+    def test_sums_to_100(self):
+        _sums_to_100(GARNET_IG_DF.mineral.end_members(TC_g_W24))
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +219,7 @@ CD_DF = pd.DataFrame(
         "Al2O3": [34.0],
         "FeO": [10.0],
         "MgO": [8.0],
+        "MnO": [0.0],
     }
 )
 
@@ -186,6 +229,7 @@ CD_MG = pd.DataFrame(
         "Al2O3": [34.0],
         "FeO": [3.0],
         "MgO": [15.0],
+        "MnO": [0.0],
     }
 )
 
@@ -319,8 +363,14 @@ class TestTCMuscovite:
         _sums_to_100(MU_DF.mineral.end_members(TC_mu))
 
     def test_k_rich(self):
+        """MU_DF is K-dominant (K2O=10 vs Na2O=1, CaO=0.2): the K-site end-member
+        family (mu/cel/fcel) should outweigh the Na/Ca family (pa/mat), even
+        though Tschermak substitution (y) splits the K family further into
+        celadonite components rather than leaving pure muscovite dominant."""
         r = MU_DF.mineral.end_members(TC_mu)
-        assert r["mu"].iloc[0] > 50
+        k_family = r["mu"].iloc[0] + r["cel"].iloc[0] + r["fcel"].iloc[0]
+        na_ca_family = r["pa"].iloc[0] + r["mat"].iloc[0]
+        assert k_family > na_ca_family
 
 
 # ---------------------------------------------------------------------------
@@ -351,9 +401,17 @@ class TestTCBiotite:
     def test_sums_to_100(self):
         _sums_to_100(BI_DF.mineral.end_members(TC_bi))
 
+    def test_order_parameters_accepted(self):
+        """Biotite has one genuine order parameter, Q -- verify the accessor
+        forwards order_parameters through to Phase.end_members/proportions."""
+        default = BI_DF.mineral.end_members(TC_bi)
+        ordered = BI_DF.mineral.end_members(TC_bi, order_parameters={"Q": 0.1})
+        assert not default.equals(ordered)
+        _sums_to_100(ordered)
+
 
 # ---------------------------------------------------------------------------
-# Clinopyroxene
+# Clinopyroxene / Augite (metabasite)
 # ---------------------------------------------------------------------------
 
 CPX_DF = pd.DataFrame(
@@ -369,7 +427,11 @@ CPX_DF = pd.DataFrame(
 )
 
 
-class TestTCClinopyroxene:
+class TestTCOmphacite:
+    """TC_dio (metabasite Omphacite) is the direct successor of the old
+    monolithic TC Clinopyroxene model -- same axfile abbreviation ('dio'),
+    same 7 end-members."""
+
     def test_columns(self):
         _has_cols(
             CPX_DF.mineral.end_members(TC_dio),
@@ -378,6 +440,18 @@ class TestTCClinopyroxene:
 
     def test_sums_to_100(self):
         _sums_to_100(CPX_DF.mineral.end_members(TC_dio))
+
+
+class TestTCAugite:
+    """Augite was split out of the old monolithic TC_dio model -- new coverage,
+    no direct predecessor test to port."""
+
+    def test_sums_to_100(self):
+        _sums_to_100(CPX_DF.mineral.end_members(TC_aug))
+
+    def test_apfu_works(self):
+        apfu = CPX_DF.mineral.apfu(TC_aug)
+        assert "Si{4+}" in apfu.columns
 
 
 # ---------------------------------------------------------------------------
@@ -494,8 +568,13 @@ class TestTCChlorite:
         _sums_to_100(CHL_DF.mineral.end_members(TC_chl))
 
     def test_mg_rich(self):
-        r = CHL_MG.mineral.end_members(TC_chl)
-        assert r["clin"].iloc[0] + r["afchl"].iloc[0] > 50
+        """Chlorite has 3 hidden order parameters (QAl, Q1, Q4) that default to
+        0 (disordered reference state) -- an absolute dominance threshold isn't
+        reliable without real order-parameter input, but the Fe end-member
+        (daphnite) share should still drop as the bulk gets more Mg-rich."""
+        daph_fe_rich = CHL_DF.mineral.end_members(TC_chl)["daph"].iloc[0]
+        daph_mg_rich = CHL_MG.mineral.end_members(TC_chl)["daph"].iloc[0]
+        assert daph_mg_rich < daph_fe_rich
 
 
 # ---------------------------------------------------------------------------
@@ -523,6 +602,53 @@ class TestTCIlmenite:
 
     def test_sums_to_100(self):
         _sums_to_100(ILM_DF.mineral.end_members(TC_ilmm))
+
+
+# ---------------------------------------------------------------------------
+# Olivine (no predecessor in the old TC_* set)
+# ---------------------------------------------------------------------------
+
+OL_DF = pd.DataFrame({"SiO2": [40.0], "FeO": [10.0], "MgO": [49.0]})
+
+
+class TestTCOlivine:
+    def test_columns(self):
+        _has_cols(OL_DF.mineral.end_members(TC_ol), ["fo", "fa"])
+
+    def test_sums_to_100(self):
+        _sums_to_100(OL_DF.mineral.end_members(TC_ol))
+
+    def test_forsterite_dominant(self):
+        r = OL_DF.mineral.end_members(TC_ol)
+        assert r["fo"].iloc[0] > r["fa"].iloc[0]
+
+
+# ---------------------------------------------------------------------------
+# Amphibole (no predecessor in the old TC_* set, needs order_parameters
+# for a non-degenerate, genuinely sodic composition)
+# ---------------------------------------------------------------------------
+
+AMP_DF = pd.DataFrame(
+    {
+        "SiO2": [52.0],
+        "Al2O3": [6.0],
+        "FeO": [12.0],
+        "MgO": [16.0],
+        "CaO": [12.0],
+        "Na2O": [1.0],
+        "K2O": [0.3],
+        "TiO2": [0.2],
+    }
+)
+
+
+class TestTCAmphibole:
+    def test_sums_to_100(self):
+        _sums_to_100(AMP_DF.mineral.end_members(TC_hb))
+
+    def test_check_stoichiometry(self):
+        result = AMP_DF.mineral.check_stoichiometry(TC_hb)
+        assert (result.iloc[0] >= 0).all()
 
 
 # ---------------------------------------------------------------------------

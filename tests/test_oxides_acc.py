@@ -310,3 +310,73 @@ class TestSelect:
         df = pd.DataFrame({"SiO2": [60.0], "FeO": [8.0]})
         with pytest.raises(TypeError, match="arg must be"):
             df.oxides.select(42)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Apatite correction
+# ---------------------------------------------------------------------------
+
+
+class TestApatiteCorrection:
+    def test_granite_reduces_cao(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.oxides.apatite_correction()
+        # P2O5 = 0.12 wt% → CaO consumed ≈ 0.157 wt%
+        assert result["CaO"].iloc[0] < granite_bulk["CaO"].iloc[0]
+
+    def test_granite_p2o5_zeroed(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.oxides.apatite_correction()
+        assert (result["P2O5"] == 0.0).all()
+
+    def test_basalt_reduces_cao(self, basalt_bulk: pd.DataFrame) -> None:
+        result = basalt_bulk.oxides.apatite_correction()
+        # P2O5 = 0.25 → CaO consumed ≈ 0.327 wt%
+        assert result["CaO"].iloc[0] < basalt_bulk["CaO"].iloc[0]
+
+    def test_basalt_p2o5_zeroed(self, basalt_bulk: pd.DataFrame) -> None:
+        result = basalt_bulk.oxides.apatite_correction()
+        assert (result["P2O5"] == 0.0).all()
+
+    def test_zero_p2o5_unchanged(self) -> None:
+        df = pd.DataFrame(
+            {"SiO2": [72.0], "Al2O3": [14.0], "CaO": [1.8], "P2O5": [0.0]}
+        )
+        result = df.oxides.apatite_correction()
+        pd.testing.assert_frame_equal(result, df)
+
+    def test_no_p2o5_column_unchanged(self) -> None:
+        df = pd.DataFrame({"SiO2": [72.0], "Al2O3": [14.0], "CaO": [1.8]})
+        result = df.oxides.apatite_correction()
+        pd.testing.assert_frame_equal(result, df)
+
+    def test_no_cao_column_zeros_p2o5(self) -> None:
+        df = pd.DataFrame({"SiO2": [72.0], "P2O5": [0.25]})
+        result = df.oxides.apatite_correction()
+        assert (result["P2O5"] == 0.0).all()
+
+    def test_columns_preserved(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.oxides.apatite_correction()
+        assert list(result.columns) == list(granite_bulk.columns)
+
+    def test_does_not_mutate(self, granite_bulk: pd.DataFrame) -> None:
+        original_cao = granite_bulk["CaO"].iloc[0]
+        granite_bulk.oxides.apatite_correction()
+        assert granite_bulk["CaO"].iloc[0] == original_cao
+
+    def test_correction_amount(self) -> None:
+        """Verify exact correction for a known composition."""
+        from petropandas._core import MW
+
+        df = pd.DataFrame({"SiO2": [72.0], "CaO": [2.0], "P2O5": [1.0]})
+        result = df.oxides.apatite_correction()
+
+        expected_cao = 2.0 - (10.0 / 3.0) * (1.0 / MW("P2O5")) * MW("CaO")
+        assert result["CaO"].iloc[0] == pytest.approx(expected_cao, rel=1e-6)
+
+
+class TestCalcApatiteCorrection:
+    def test_matches_accessor(self, granite_bulk: pd.DataFrame) -> None:
+        from petropandas._calc import apatite_correction
+
+        from_accessor = granite_bulk.oxides.apatite_correction()
+        from_func = apatite_correction(granite_bulk)
+        pd.testing.assert_frame_equal(from_accessor, from_func)

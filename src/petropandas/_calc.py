@@ -403,10 +403,10 @@ def from_apfu(
 
 
 def normalize(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalise oxide wt% so each row sums to 100%.
+    """Normalise oxide columns so each row sums to 100%.
 
     Args:
-        df: DataFrame with oxide columns in wt%.
+        df: DataFrame with oxide columns (wt% or molar proportions).
 
     Returns:
         Normalised DataFrame.

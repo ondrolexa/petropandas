@@ -32,7 +32,6 @@ All accessors auto-convert from the current unit tracked in `df.attrs["petro_uni
 | `df.bulk.cipw()` | CIPW normative mineralogy |
 | `df.bulk.alumina_saturation()` | A/NK and A/CNK molar ratios |
 | `df.bulk.oxide_ratios()` | Mg#, FeOT, total alkalis |
-| `df.bulk.apatite_correction()` | Remove CaO bound in apatite |
 | `df.bulk.TCbulk()` | THERMOCALC bulk composition |
 | `df.bulk.Perplexbulk()` | PerpleX bulk composition |
 | `df.bulk.MAGEMin()` | MAGEMin bulk composition |
@@ -42,13 +41,12 @@ All accessors auto-convert from the current unit tracked in `df.attrs["petro_uni
 Built-in example datasets available via `petropandas.data`:
 
 ```python
-from petropandas.data import minerals, pyroxenes, grt_profile, bulk, avgpelite
+from petropandas.data import minerals, grt_profile, bulk, avgpelite
 ```
 
 | Dataset | Rows | Description |
 |---------|------|-------------|
-| `minerals` | 16 | Mixed mineral analyses |
-| `pyroxenes` | 5 | Pyroxene spot analyses |
+| `minerals` | 315 | Analyses across 21 mineral groups (`Mineral` column) |
 | `grt_profile` | 99 | Garnet compositional profile |
 | `bulk` | 9 | Bulk rock compositions |
 | `avgpelite` | 1 | Average pelite composition |

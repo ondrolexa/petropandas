@@ -30,11 +30,10 @@ uv add petropandas --optional docs
 
 ```python
 from petropandas import pd
-from petropandas.data import minerals, pyroxenes, grt_profile, bulk
+from petropandas.data import minerals, grt_profile, bulk
 
 # Built-in example datasets
-df = minerals  # 16 mineral analyses
-px = pyroxenes  # 5 pyroxene spot analyses
+df = minerals  # 315 analyses across 21 mineral groups (Mineral column)
 gp = grt_profile  # 99-point garnet profile
 b = bulk  # 9 bulk rock compositions
 
@@ -77,19 +76,23 @@ _calc.convert(df, to_unit="apfu", n_oxygens=12)
 ### Mineral Calculations
 
 ```python
-from petropandas import Grt, Cpx, Amp
+from petropandas import Grt
+
+# minerals mixes 21 mineral groups (Mineral column) -- filter to one before
+# applying a mineral-specific calculation
+grt = df.oxides.select("Garnet", on="Mineral")
 
 # APFU for garnet (12 oxygens)
-df.mineral.apfu(Grt)
+grt.mineral.apfu(Grt)
 
 # End-member proportions
-df.mineral.end_members(Grt)
+grt.mineral.end_members(Grt)
 
 # Site allocations
-df.mineral.site_allocations(Grt)
+grt.mineral.site_allocations(Grt)
 
 # Stoichiometry quality check (0-1 scores)
-df.mineral.check_stoichiometry(Grt)
+grt.mineral.check_stoichiometry(Grt)
 ```
 
 ### Bulk Composition Analysis
@@ -120,7 +123,7 @@ sp.show()
 
 # Ternary diagram
 tp = TernaryPlot(top="Prp", left="Alm", right="Grs")
-tp.add(df.mineral.end_members(Grt))
+tp.add(grt.mineral.end_members(Grt))
 tp.show()
 
 # Compositional profile
