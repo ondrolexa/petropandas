@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -17,6 +18,59 @@ from matplotlib.ticker import MaxNLocator
 # placed this way as long as it's attached via `Axes.legend()` (not
 # `Figure.legend()`).
 _LEGEND_OUTSIDE_KWARGS = {"loc": "center left", "bbox_to_anchor": (1.02, 0.5)}
+
+# Matches an expr that is *only* a single column reference (bare identifier or one
+# backtick-quoted name) with nothing else - used to tell "plot this one column" (a
+# missing name should raise) apart from a genuine multi-term expression (a missing
+# name should default to 0, see `_eval`).
+_SINGLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$|^`[^`]+`$")
+_NAME_TOKEN_RE = re.compile(r"`([^`]+)`|\b([A-Za-z_][A-Za-z0-9_]*)\b")
+# Python/numexpr keywords and function names DataFrame.eval() resolves itself - must
+# not be mistaken for missing columns and zero-filled.
+_EVAL_RESERVED = {
+    "and",
+    "or",
+    "not",
+    "in",
+    "is",
+    "if",
+    "else",
+    "True",
+    "False",
+    "None",
+    "abs",
+    "sqrt",
+    "log",
+    "log10",
+    "log1p",
+    "exp",
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "where",
+    "arctan2",
+}
+
+
+def _referenced_names(expr: str) -> set[str]:
+    """Bare/backtick-quoted identifiers referenced in a `DataFrame.eval()` expression."""
+    names = set()
+    for backtick, ident in _NAME_TOKEN_RE.findall(expr):
+        name = backtick or ident
+        if backtick or name not in _EVAL_RESERVED:
+            names.add(name)
+    return names
+
+
+def _strip_backticks(expr: str) -> str:
+    """Remove backtick quoting from an expression for use as a display label."""
+    return expr.replace("`", "")
 
 
 class BasePlot(ABC):
@@ -153,8 +207,15 @@ class BasePlot(ABC):
         """Evaluate a column expression against a group's DataFrame.
 
         Args:
-            expr: ``pandas.eval()`` expression referencing columns of
-                ``data``.
+            expr: A column name of ``data`` (matched directly, so exotic
+                names like ion notation ``"Al{3+}"`` work with no
+                escaping), or a ``DataFrame.eval()`` expression — wrap
+                special-character column names in backticks to combine
+                them (e.g. ``` "`Al{3+}` + `Si{4+}`" ```). A name missing
+                from ``data`` defaults to 0 *within a multi-term
+                expression* (e.g. plotting ``"Sps+Grs"`` across mineral
+                groups that don't all report ``Sps``); a single column
+                reference that's entirely missing still raises.
             data: Samples in rows, variables in columns.
 
         Returns:
@@ -164,7 +225,18 @@ class BasePlot(ABC):
             TypeError: If ``expr`` evaluates to something other than a
                 ``pandas.Series`` (e.g. a constant expression).
         """
-        result = pd.eval(expr, local_dict=data)
+        stripped = expr.strip()
+        if stripped in data.columns:
+            result = data[stripped]
+        elif _SINGLE_NAME_RE.fullmatch(stripped):
+            result = data.eval(expr)
+        else:
+            missing = _referenced_names(expr) - set(data.columns)
+            if missing:
+                data = data.copy()
+                for name in missing:
+                    data[name] = 0.0
+            result = data.eval(expr)
         if not isinstance(result, pd.Series):
             raise TypeError(
                 f"Expression {expr!r} must evaluate to a pandas Series, "
@@ -217,8 +289,8 @@ class ScatterPlot(BasePlot):
         super().__init__(**kwargs)
         self.x = x
         self.y = y
-        self.xlabel = xlabel if xlabel is not None else x
-        self.ylabel = ylabel if ylabel is not None else y
+        self.xlabel = xlabel if xlabel is not None else _strip_backticks(x)
+        self.ylabel = ylabel if ylabel is not None else _strip_backticks(y)
         self.xlim = xlim
         self.ylim = ylim
 
@@ -598,9 +670,13 @@ class TernaryPlot(BasePlot):
         self.left = left
         self.right = right
         self.ternary_sum = ternary_sum
-        self.top_label = top_label if top_label is not None else top
-        self.left_label = left_label if left_label is not None else left
-        self.right_label = right_label if right_label is not None else right
+        self.top_label = top_label if top_label is not None else _strip_backticks(top)
+        self.left_label = (
+            left_label if left_label is not None else _strip_backticks(left)
+        )
+        self.right_label = (
+            right_label if right_label is not None else _strip_backticks(right)
+        )
         self.tlim = tlim
         self.llim = llim
         self.rlim = rlim
@@ -619,7 +695,7 @@ class TernaryPlot(BasePlot):
         ax.set_aspect("equal")
         ax.axis("off")
         if self.title:
-            ax.set_title(self.title, pad=28)
+            ax.set_title(self.title, pad=44)
 
         polygon = _polygon_vertices(self.tlim, self.llim, self.rlim, self.ternary_sum)
         xs, ys = zip(*(_project(v[0], v[1], v[2]) for v in polygon))
@@ -685,7 +761,9 @@ class TernaryPlot(BasePlot):
             )
 
         vertex_gap = label_gap * 2.5
+        top_vertex_gap = label_gap * 3.3
         cut_vertex_gap = tick_len + label_gap * 1.5
+        top_cut_vertex_gap = cut_vertex_gap + label_gap * 1.7
         vertex_tangent = {0: 0.0, 1: 0, 2: 0.0}
         vertex_tangent_gap = label_gap * 1.1
         for key, text in (
@@ -694,7 +772,10 @@ class TernaryPlot(BasePlot):
             (2, self.right_label),
         ):
             (cx, cy), (nx, ny), is_cut = _vertex_anchor(polygon, key, centroid)
-            gap = cut_vertex_gap if is_cut else vertex_gap
+            if key == 0:
+                gap = top_cut_vertex_gap if is_cut else top_vertex_gap
+            else:
+                gap = cut_vertex_gap if is_cut else vertex_gap
             rotation = axis_rotation.get(key, 0.0)
             tx = (
                 math.cos(math.radians(rotation))

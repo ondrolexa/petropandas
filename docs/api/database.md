@@ -19,6 +19,8 @@ PetroDB is a REST client for the petrodb database, providing access to projects,
 
 ::: petropandas._database.APIError
 
+::: petropandas._database.ReadOnlyError
+
 ## Data Model
 
 ### Project
@@ -52,6 +54,13 @@ PetroDB is a REST client for the petrodb database, providing access to projects,
 ### Area
 
 ::: petropandas._database.Area
+    options:
+      show_source: false
+      members_order: source
+
+### ProfileSpot
+
+::: petropandas._database.ProfileSpot
     options:
       show_source: false
       members_order: source

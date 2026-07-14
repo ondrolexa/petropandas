@@ -1,5 +1,5 @@
 # Tutorial
-Here we demonstrate the `petropandas` package. It could be activated by importing pandas alias `pd` from `petropandas` or import all for full functionality.
+Here we demonstrate the `petropandas` package. For simplicity, we will use star import.
 
 
 ```python
@@ -4068,13 +4068,23 @@ t.show()
 
 
 
-Scatter plots are also available
+Scatter plots are also available. Note when using apfu, the ions names in expressions must be back-quoted.
 
 
 ```python
-s = ScatterPlot("SiO2/Al2O3", "(CaO+Na2O+K2O)/(FeO+MgO)", title="Pearce")
-for mineral in ['Garnet', 'Biotite', 'Plagioclase', 'Muscovite', 'K-feldspar', 'Chloritoid', 'Cordierite', 'Staurolite']:
-    s.add(df.oxides.select(mineral, on="Mineral").moles(), label=mineral)
+pairs = [
+    ('Garnet', Grt),
+    ('Biotite', Bt),
+    ('Plagioclase', Fsp),
+    ('Muscovite', Ms),
+    ('K-feldspar', Fsp),
+    ('Chloritoid', Cld),
+    ('Cordierite', Crd),
+    ('Staurolite', St)
+]
+s = ScatterPlot("`Si{4+}`/`Al{3+}`", "(`Ca{2+}`+`Na{+}`+`K{+}`)/(`Fe{2+}`+`Fe{3+}`+`Mg{2+}`)", title="Pearce")
+for mineral, model in pairs:
+    s.add(df.oxides.select(mineral, on="Mineral").mineral.apfu(model), label=mineral)
 s.show()
 ```
 

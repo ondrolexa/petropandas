@@ -51,6 +51,86 @@ def test_scatter_eval_expressions_produce_correct_offsets(
     assert offsets[:, 1] == pytest.approx(expected_y)
 
 
+def test_scatter_ion_notation_column_names():
+    """Ion/APFU column names (e.g. "Al{3+}") contain characters that are not
+    valid in a bare pandas.eval() expression -- plotting them directly must
+    not raise SyntaxError."""
+    df = pd.DataFrame({"Al{3+}": [1.0, 2.0], "Si{4+}": [3.0, 4.0]})
+    s = ScatterPlot("Al{3+}", "Si{4+}")
+    s.add(df)
+    fig, ax = s.render()
+    offsets = np.asarray(ax.collections[0].get_offsets())
+    assert offsets[:, 0] == pytest.approx(df["Al{3+}"].to_numpy())
+    assert offsets[:, 1] == pytest.approx(df["Si{4+}"].to_numpy())
+    plt.close(fig)
+
+
+def test_scatter_backtick_quoted_ion_expression():
+    """Special-character column names can still be combined in an expression
+    via backtick-quoting (standard pandas.DataFrame.eval() syntax)."""
+    df = pd.DataFrame({"Al{3+}": [1.0, 2.0], "Si{4+}": [3.0, 4.0]})
+    s = ScatterPlot("`Al{3+}` + `Si{4+}`", "Al{3+}")
+    s.add(df)
+    fig, ax = s.render()
+    offsets = np.asarray(ax.collections[0].get_offsets())
+    assert offsets[:, 0] == pytest.approx((df["Al{3+}"] + df["Si{4+}"]).to_numpy())
+    plt.close(fig)
+
+
+def test_scatter_default_label_strips_backticks():
+    """Backtick quoting is eval() syntax, not part of the intended label text."""
+    df = pd.DataFrame({"Al{3+}": [1.0, 2.0], "Si{4+}": [3.0, 4.0]})
+    s = ScatterPlot("`Al{3+}` + `Si{4+}`", "Al{3+}")
+    s.add(df)
+    fig, ax = s.render()
+    assert ax.get_xlabel() == "Al{3+} + Si{4+}"
+    assert ax.get_ylabel() == "Al{3+}"
+    plt.close(fig)
+
+
+def test_scatter_explicit_label_with_backtick_unchanged():
+    df = pd.DataFrame({"Al{3+}": [1.0, 2.0]})
+    s = ScatterPlot("Al{3+}", "Al{3+}", xlabel="literal `backtick` label")
+    s.add(df)
+    fig, ax = s.render()
+    assert ax.get_xlabel() == "literal `backtick` label"
+    plt.close(fig)
+
+
+def test_scatter_missing_name_in_expression_defaults_to_zero():
+    """Groups don't always share every column (e.g. not every mineral group
+    reports Sps) -- a name missing from *within* a multi-term expression
+    should default to 0 rather than raising UndefinedVariableError."""
+    df = pd.DataFrame({"Grs": [1.0, 2.0]})
+    s = ScatterPlot("Sps+Grs", "Grs")
+    s.add(df)
+    fig, ax = s.render()
+    offsets = np.asarray(ax.collections[0].get_offsets())
+    assert offsets[:, 0] == pytest.approx(df["Grs"].to_numpy())
+    plt.close(fig)
+
+
+def test_scatter_missing_backtick_name_in_expression_defaults_to_zero():
+    df = pd.DataFrame({"Al{3+}": [1.0, 2.0]})
+    s = ScatterPlot("`Al{3+}` + `Si{4+}`", "Al{3+}")
+    s.add(df)
+    fig, ax = s.render()
+    offsets = np.asarray(ax.collections[0].get_offsets())
+    assert offsets[:, 0] == pytest.approx(df["Al{3+}"].to_numpy())
+    plt.close(fig)
+
+
+def test_scatter_missing_single_column_still_raises():
+    """A lone column reference that's entirely missing is a real usage error
+    (e.g. a typo), not a "some groups lack this value" situation -- it must
+    keep raising rather than silently plotting zeros."""
+    df = pd.DataFrame({"Grs": [1.0, 2.0]})
+    s = ScatterPlot("Sps", "Grs")
+    s.add(df)
+    with pytest.raises(pd.errors.UndefinedVariableError):
+        s.render()
+
+
 def test_scatter_legend_labels(scatter_rendered):
     _, ax = scatter_rendered
     labels = [t.get_text() for t in ax.get_legend().get_texts()]
@@ -183,6 +263,20 @@ def test_ternary_default_corner_labels_from_expressions(ternary_rendered):
     assert "Prp" in texts
     assert "Sps" in texts
     assert "Grs" in texts
+
+
+def test_ternary_default_labels_strip_backticks():
+    df = pd.DataFrame(
+        {"Al{3+}": [1.0, 2.0], "Si{4+}": [3.0, 4.0], "Ca{2+}": [0.5, 0.5]}
+    )
+    t = TernaryPlot("`Al{3+}` + `Si{4+}`", "Al{3+}", "Ca{2+}")
+    t.add(df)
+    fig, ax = t.render()
+    texts = [txt.get_text() for txt in ax.texts]
+    assert "Al{3+} + Si{4+}" in texts
+    assert "Al{3+}" in texts
+    assert "Ca{2+}" in texts
+    plt.close(fig)
 
 
 def test_ternary_default_ternary_sum():

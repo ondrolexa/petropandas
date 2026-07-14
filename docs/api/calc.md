@@ -20,6 +20,10 @@ The `petropandas._calc` module provides pure functions for unit conversions, val
     options:
       show_source: false
 
+::: petropandas._calc.to_apfu_by_charge
+    options:
+      show_source: false
+
 ::: petropandas._calc.from_apfu
     options:
       show_source: false
