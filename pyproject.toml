@@ -25,7 +25,16 @@ Issues = "https://github.com/ondrolexa/petropandas/issues"
 
 [project.optional-dependencies]
 lab = ["jupyterlab"]
-docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]"]
+docs = [
+    "sphinx>=7.0",
+    "shibuya",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "nbsphinx",
+    "pandoc",
+    "ipykernel",
+    "pygments-styles",
+]
 
 [dependency-groups]
 dev = [

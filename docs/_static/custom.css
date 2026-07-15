@@ -1,0 +1,24 @@
+/* Override nbsphinx-code-cells.css for wider pandas tables */
+div.rendered_html table,
+.jp-RenderedHTMLCommon table {
+    table-layout: auto;
+}
+
+div.rendered_html th,
+div.rendered_html td,
+.jp-RenderedHTMLCommon th,
+.jp-RenderedHTMLCommon td {
+    white-space: nowrap;
+    max-width: none;
+}
+
+/* Constrain notebook output so tables scroll instead of page */
+.nboutput .output_area > div {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+/* Horizontal scroll for code blocks in notebooks */
+.nboutput .output_area pre {
+    overflow-x: auto;
+}

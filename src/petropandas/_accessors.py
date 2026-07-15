@@ -159,19 +159,20 @@ class MineralAccessor:
             DataFrame with the same index as the input, one column per
             criterion, values between 0 (impossible) and 1 (perfect fit).
 
-        Criteria:
-            analytical_total: Oxide wt% sum vs mineral-specific ideal range.
-            cation_deviation: Total APFU vs ideal cation count (NaN if
-                mineral does not define ``ideal_cations``).
-            charge_balance: Total positive charge vs expected from oxygen
-                count (exponential decay).
-            fe3+_validity: Binary check that ``Fe{3+}`` and ``Fe{2+}`` are
-                non-negative after valence splitting (NaN if no Fe split).
-            site_vacancies: Mean site occupancy fraction across all sites.
-            leftover_cations: Fraction of total APFU not assigned to any
-                site.
-            tetrahedral_fill: T-site sum vs T-site capacity (NaN if no
-                T-site defined).
+        Columns in the returned DataFrame:
+
+        * ``analytical_total`` — Oxide wt% sum vs mineral-specific ideal range.
+        * ``cation_deviation`` — Total APFU vs ideal cation count (NaN if
+          mineral does not define ``ideal_cations``).
+        * ``charge_balance`` — Total positive charge vs expected from oxygen
+          count (exponential decay).
+        * ``fe3+_validity`` — Binary check that ``Fe{3+}`` and ``Fe{2+}`` are
+          non-negative after valence splitting (NaN if no Fe split).
+        * ``site_vacancies`` — Mean site occupancy fraction across all sites.
+        * ``leftover_cations`` — Fraction of total APFU not assigned to any
+          site.
+        * ``tetrahedral_fill`` — T-site sum vs T-site capacity (NaN if no
+          T-site defined).
         """
         import numpy as np
 

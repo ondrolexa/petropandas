@@ -57,17 +57,8 @@ class Mineral:
     """Base class for mineral structural-formula calculations.
 
     Subclasses must set the following class attributes:
-
-    Attributes:
-        name: Human-readable mineral name.
-        n_oxygens: Number of oxygens in the formula unit.
-        ideal_cations: Ideal cation total, or None to omit.
-        valence_splits: List of dicts with ``"element"`` and ``"method"``
-            keys, optionally ``"n_oxygens"`` and ``"ideal_cations"``.
-        site_definitions: Ordered list of site dicts, each with
-            ``"name"``, ``"capacity"``, and ``"priority"`` (list of ion
-            names such as ``"Fe{2+}"``, ``"Si{4+}"``).
-        analytical_total_range: Tuple of (low, high) ideal oxide wt% sum.
+    ``name``, ``n_oxygens``, ``ideal_cations``, ``valence_splits``,
+    ``site_definitions``, and ``analytical_total_range``.
     """
 
     name: str = "Unknown"
