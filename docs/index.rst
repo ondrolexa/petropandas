@@ -14,7 +14,7 @@ Highlights
   ``df.bulk``)
 - **16 IMA mineral objects** — Garnet, Feldspar, Pyroxenes, Micas, Chlorite,
   Epidote, Amphibole, and more
-- **16 THERMOCALC activity-composition (a-x) solution models
+- **33 THERMOCALC activity-composition (a-x) solution models
 - **Fe\ :sup:`3+`/Fe\ :sup:`2+` estimation** — Droop (1987) and Schumacher
   (1991) methods
 - **Bulk composition tools** — CIPW norm, THERMOCALC/PerpleX/MAGEMin output
