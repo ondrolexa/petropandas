@@ -25,6 +25,10 @@ ALIASES: dict[str, str] = {
     "Fe2O3t": "Fe2O3",
     "Fe2O3 Total": "Fe2O3",
     "Fe2O3(T)": "Fe2O3",
+    "H2O_PLUS": "H2O",
+    "H2O+": "H2O",
+    "H2OPLUS": "H2O",
+    "H2OP": "H2O",
 }
 
 

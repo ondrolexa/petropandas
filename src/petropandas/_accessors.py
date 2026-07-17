@@ -642,8 +642,8 @@ class BulkAccessor:
         """Return a cleaned copy of the DataFrame in wt%."""
         return self._obj.copy()
 
-    def cipw(self) -> pd.DataFrame:
-        """Compute CIPW normative mineralogy.
+    def cipw_simple(self) -> pd.DataFrame:
+        """Compute CIPW normative mineralogy (simple version).
 
         Requires major oxides in wt% (at minimum SiO₂, Al₂O₃,
         Fe₂O₃, FeO, MgO, CaO, Na₂O, K₂O).  Missing optional
@@ -653,7 +653,80 @@ class BulkAccessor:
             DataFrame with normative mineral columns (Qz, Or, Ab,
             An, Di, Hy, Mt, Il, Ap, etc.) in wt%.
         """
-        return _calc.cipw_norm(self._obj)
+        return _calc.cipw_norm_simple(self._obj)
+
+    def cipw(
+        self,
+        *,
+        normsum: bool = False,
+        cancrinite: bool = False,
+        spinel: bool = False,
+        complete_results: bool = False,
+    ) -> pd.DataFrame:
+        """Compute the standard CIPW norm (GCDkit-faithful).
+
+        Port of CIPW() from GCDkit/inst/Norms/CIPW.r.  Requires major
+        oxides in wt% (at minimum SiO₂, Al₂O₃, Fe₂O₃, FeO, MgO, CaO,
+        Na₂O, K₂O).  Missing optional oxides default to 0.
+
+        Args:
+            normsum: If True, normalise the norm so the mineral sum
+                equals 100.
+            cancrinite: If True, form cancrinite (Nc) from Na₂O + CO₂
+                before the calcite step.
+            spinel: If True, form spinel (Sp) from corundum + (Mg,Fe)O
+                when SiO₂ < 45 (molar).
+            complete_results: If True, keep all normative-mineral columns
+                including sub-mineral splits (En, Fs, Fo, Fa, MgDi,
+                FeDi) and columns that are zero for every sample.
+
+        Returns:
+            DataFrame indexed like the input, with normative-mineral
+            columns in wt% named per GCDkit convention (Q, Or, Ab, An,
+            Di, Hy, Mt, Il, Ap, …) plus a ``Total`` column.
+        """
+        return _calc.cipw_norm(
+            self._obj,
+            normsum=normsum,
+            cancrinite=cancrinite,
+            spinel=spinel,
+            complete_results=complete_results,
+        )
+
+    def cipwhb(
+        self,
+        *,
+        normsum: bool = False,
+        cancrinite: bool = False,
+        spinel: bool = False,
+        complete_results: bool = False,
+    ) -> pd.DataFrame:
+        """Compute the CIPW norm with hornblende/biotite recasting.
+
+        Port of CIPWhb() from GCDkit/inst/Norms/CIPWhb.r.  Mafic
+        components are recast into biotite (Bi) and hornblende (Hbl)
+        instead of diopside/hypersthene/olivine.
+
+        Args:
+            normsum: If True, normalise the norm so the mineral sum
+                equals 100.
+            cancrinite: If True, form cancrinite (Nc) from Na₂O + CO₂.
+            spinel: If True, form spinel when SiO₂ < 45 (molar).
+            complete_results: If True, keep all normative-mineral columns
+                including sub-mineral splits and zero-only columns.
+
+        Returns:
+            DataFrame indexed like the input, with normative-mineral
+            columns in wt% named per GCDkit convention (Q, Or, Ab, An,
+            Bi, Hbl, Act, Ed, …) plus a ``Total`` column.
+        """
+        return _calc.cipw_norm_hb(
+            self._obj,
+            normsum=normsum,
+            cancrinite=cancrinite,
+            spinel=spinel,
+            complete_results=complete_results,
+        )
 
     def alumina_saturation(self, classify: bool = False) -> pd.DataFrame:
         """Compute alumina saturation indices (A/NK, A/CNK).
