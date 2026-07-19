@@ -1,5 +1,5 @@
 """Tests for PetroAccessor (df.petro), MolesAccessor (df.moles),
-ApfuAccessor (df.apfu), and OxidesAccessor (df.oxides) roundtrips."""
+CationsAccessor (df.cations), and OxidesAccessor (df.oxides) roundtrips."""
 
 from __future__ import annotations
 
@@ -74,9 +74,15 @@ class TestMolesAccessor:
         pd.testing.assert_frame_equal(m, m2)
 
     def test_from_apfu(self, diopside: pd.DataFrame) -> None:
-        result = diopside.apfu(n_oxygens=6).moles()
+        result = diopside.cations(n_oxygens=6).moles()
         assert result.attrs.get("petro_units") == "moles"
         assert "SiO2" in result.columns
+
+    def test_element_columns_converted(self) -> None:
+        df = pd.DataFrame({"SiO2": [50.0], "MgO": [20.0], "CaO": [10.0], "F": [0.5]})
+        result = df.moles()
+        assert "F" in result.columns
+        assert result["F"].iloc[0] == pytest.approx(0.5 / 19.0, abs=0.001)
 
 
 class TestMolesNormalized:
@@ -98,6 +104,13 @@ class TestMolesNormalized:
         n1 = fe_pyroxene.moles.normalized()
         n2 = n1.moles.normalized()
         pd.testing.assert_frame_equal(n1, n2)
+
+    def test_retains_element_columns(self) -> None:
+        df = pd.DataFrame({"SiO2": [55.0], "MgO": [18.0], "CaO": [25.0], "F": [0.5]})
+        result = df.moles.normalized()
+        assert "F" in result.columns
+        assert result["F"].iloc[0] > 0
+        assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +152,7 @@ class TestOxidesRoundtrip:
 
     def test_from_apfu_roundtrip_ratios(self, diopside: pd.DataFrame) -> None:
         ox = diopside[["SiO2", "MgO", "CaO"]]
-        back = ox.apfu(n_oxygens=6).oxides()
+        back = ox.cations(n_oxygens=6).oxides()
         for c in ox.columns:
             r_orig = ox[c].iloc[0] / ox.sum(axis=1).iloc[0]
             r_back = back[c].iloc[0] / back.sum(axis=1).iloc[0]
@@ -147,7 +160,7 @@ class TestOxidesRoundtrip:
 
     def test_from_apfu_exact_roundtrip(self, diopside: pd.DataFrame) -> None:
         ox = diopside[["SiO2", "MgO", "CaO"]]
-        back = ox.apfu(n_oxygens=6).oxides()
+        back = ox.cations(n_oxygens=6).oxides()
         for c in ox.columns:
             assert back[c].iloc[0] == pytest.approx(ox[c].iloc[0], rel=1e-4)
 
@@ -162,12 +175,12 @@ class TestOxidesRoundtrip:
                 "Na2O": [2.582, 0.992],
             }
         )
-        back = df.apfu(n_oxygens=12).oxides()
+        back = df.cations(n_oxygens=12).oxides()
         for c in df.columns:
             pd.testing.assert_series_equal(back[c], df[c], check_names=False, atol=1e-2)
 
     def test_from_apfu_attrs(self, diopside: pd.DataFrame) -> None:
-        apfu = diopside.apfu(n_oxygens=6)
+        apfu = diopside.cations(n_oxygens=6)
         assert apfu.attrs.get("petro_total") is not None
         result = apfu.oxides()
         assert result.attrs.get("petro_units") == "wt%"
@@ -184,13 +197,13 @@ class TestOxidesNormalized:
 
 
 # ---------------------------------------------------------------------------
-# ApfuAccessor (df.apfu)
+# CationsAccessor (df.cations)
 # ---------------------------------------------------------------------------
 
 
-class TestApfuAccessor:
+class TestCationsAccessor:
     def test_diopside_oxygen(self, diopside: pd.DataFrame) -> None:
-        result = diopside.apfu(n_oxygens=6)
+        result = diopside.cations(n_oxygens=6)
         assert "Si{4+}" in result.columns
         assert "Mg{2+}" in result.columns
         assert "Ca{2+}" in result.columns
@@ -199,33 +212,39 @@ class TestApfuAccessor:
         assert result["Ca{2+}"].iloc[0] == pytest.approx(1.00, abs=0.01)
 
     def test_diopside_cation(self, diopside: pd.DataFrame) -> None:
-        result = diopside.apfu(n_cations=4)
+        result = diopside.cations(n_cations=4)
         assert result["Si{4+}"].iloc[0] == pytest.approx(2.00, abs=0.01)
 
     def test_from_wt(self, fe_pyroxene: pd.DataFrame) -> None:
-        from_wt = fe_pyroxene.apfu(n_oxygens=6)
+        from_wt = fe_pyroxene.cations(n_oxygens=6)
         assert from_wt.attrs.get("petro_units") == "apfu"
 
     def test_from_moles(self, fe_pyroxene: pd.DataFrame) -> None:
-        from_wt = fe_pyroxene.apfu(n_oxygens=6)
-        from_moles = fe_pyroxene.moles().apfu(n_oxygens=6)
+        from_wt = fe_pyroxene.cations(n_oxygens=6)
+        from_moles = fe_pyroxene.moles().cations(n_oxygens=6)
         pd.testing.assert_frame_equal(from_wt, from_moles)
 
     def test_sets_attrs(self, diopside: pd.DataFrame) -> None:
-        result = diopside.apfu(n_oxygens=6)
+        result = diopside.cations(n_oxygens=6)
         assert result.attrs.get("petro_units") == "apfu"
         assert result.attrs.get("petro_n_oxygens") == 6
         assert result.attrs.get("petro_n_cations") is None
 
     def test_cation_attrs(self, diopside: pd.DataFrame) -> None:
-        result = diopside.apfu(n_cations=4)
+        result = diopside.cations(n_cations=4)
         assert result.attrs.get("petro_n_cations") == 4
         assert result.attrs.get("petro_n_oxygens") is None
 
     def test_idempotent(self, diopside: pd.DataFrame) -> None:
-        a1 = diopside.apfu(n_oxygens=6)
-        a2 = a1.apfu(n_oxygens=6)
+        a1 = diopside.cations(n_oxygens=6)
+        a2 = a1.cations(n_oxygens=6)
         pd.testing.assert_frame_equal(a1, a2)
+
+    def test_element_columns_included(self) -> None:
+        df = pd.DataFrame({"SiO2": [50.0], "MgO": [20.0], "CaO": [10.0], "F": [0.5]})
+        result = df.cations(n_oxygens=6)
+        assert "F" in result.columns
+        assert result["F"].iloc[0] == pytest.approx(0.5 / 19.0, abs=0.001)
 
 
 # ---------------------------------------------------------------------------

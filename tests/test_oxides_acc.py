@@ -27,6 +27,12 @@ class TestCallable:
         result = df.oxides()
         assert result.empty
 
+    def test_element_columns_excluded(self) -> None:
+        df = pd.DataFrame({"SiO2": [50.0], "FeO": [10.0], "F": [0.3], "Cl": [0.01]})
+        result = df.oxides()
+        assert "F" not in result.columns
+        assert "Cl" not in result.columns
+
     def test_from_moles(self, diopside: pd.DataFrame) -> None:
         m = diopside.moles()
         assert m.attrs.get("petro_units") == "moles"

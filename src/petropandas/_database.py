@@ -16,9 +16,11 @@ Usage::
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from functools import cached_property
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -105,6 +107,66 @@ def _fetch_concurrently(
     return results
 
 
+def _read_dotenv(path: Path) -> dict[str, str]:
+    """Parse a simple KEY=VALUE .env file.
+
+    Blank lines and lines starting with ``#`` are ignored.
+
+    Args:
+        path: Path to the .env file.
+
+    Returns:
+        Mapping of variable name to value, or empty if *path* doesn't exist.
+    """
+    if not path.is_file():
+        return {}
+    values = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        values[key.strip()] = val.strip().strip("'\"")
+    return values
+
+
+def _resolve_setting(
+    value: str | None, env_var: str, dotenv: dict[str, str]
+) -> str | None:
+    """Fill in a missing setting from an env var, then a parsed .env file."""
+    return (
+        value if value is not None else os.environ.get(env_var) or dotenv.get(env_var)
+    )
+
+
+def _resolve_connection(
+    api_url: str | None, username: str | None, password: str | None
+) -> tuple[str | None, str | None, str | None]:
+    """Fill in missing connection settings from env vars, then a .env file.
+
+    Checks (in order) the given value, the ``PETRODBAPI``/``PETRODBUSER``/
+    ``PETRODBPASSWORD`` environment variables, then a ``.env`` file in the
+    current working directory.
+
+    Args:
+        api_url: Base URL of the PetroDB server, or None to resolve it.
+        username: Auth username, or None to resolve it.
+        password: Auth password, or None to resolve it.
+
+    Returns:
+        Tuple of (api_url, username, password), each possibly still None if
+        unresolved.
+    """
+    if api_url is not None and username is not None and password is not None:
+        return api_url, username, password
+    dotenv = _read_dotenv(Path(".env"))
+    return (
+        _resolve_setting(api_url, "PETRODBAPI", dotenv),
+        _resolve_setting(username, "PETRODBUSER", dotenv),
+        _resolve_setting(password, "PETRODBPASSWORD", dotenv),
+    )
+
+
 # ── low-level HTTP transport ────────────────────────────────────────────
 
 
@@ -115,23 +177,40 @@ class _PetroAPI:
     """Low-level HTTP client for the PetroDB REST API.
 
     Args:
-        api_url: Base URL of the PetroDB server.
-        username: Auth username.
-        password: Auth password.
+        api_url: Base URL of the PetroDB server. If None, resolved from the
+            ``PETRODBAPI`` environment variable, then a ``.env`` file in the
+            current working directory.
+        username: Auth username. If None, resolved from the ``PETRODBUSER``
+            environment variable, then a ``.env`` file in the current
+            working directory.
+        password: Auth password. If None, resolved from the
+            ``PETRODBPASSWORD`` environment variable, then a ``.env`` file
+            in the current working directory.
         timeout: Request timeout in seconds.
         read_only: If True (default), block any POST/PUT/DELETE request with
             :class:`ReadOnlyError` before it reaches the network. Authentication
             (login/re-login) is unaffected.
+
+    Raises:
+        AuthError: If api_url/username/password can't be resolved, or if
+            authentication fails.
     """
 
     def __init__(
         self,
-        api_url: str,
-        username: str,
-        password: str,
+        api_url: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
         timeout: int = 30,
         read_only: bool = True,
     ):
+        api_url, username, password = _resolve_connection(api_url, username, password)
+        if api_url is None or username is None or password is None:
+            raise AuthError(
+                "api_url/username/password not given and none found in "
+                "PETRODBAPI/PETRODBUSER/PETRODBPASSWORD environment "
+                "variables or a .env file"
+            )
         self._session = requests.Session()
         self._api_url = api_url.rstrip("/")
         self._username = username
@@ -231,16 +310,23 @@ class PetroDB:
     """High-level access to an online PetroDB instance.
 
     Args:
-        api_url: Base URL of the PetroDB server.
-        username: Auth username.
-        password: Auth password.
+        api_url: Base URL of the PetroDB server. If None, resolved from the
+            ``PETRODBAPI`` environment variable, then a ``.env`` file in the
+            current working directory.
+        username: Auth username. If None, resolved from the ``PETRODBUSER``
+            environment variable, then a ``.env`` file in the current
+            working directory.
+        password: Auth password. If None, resolved from the
+            ``PETRODBPASSWORD`` environment variable, then a ``.env`` file
+            in the current working directory.
         timeout: Request timeout in seconds.
         read_only: If True (default), any create/update/delete call raises
             :class:`ReadOnlyError` instead of reaching the network. Pass
             ``read_only=False`` to allow database mutations.
 
     Raises:
-        AuthError: If authentication fails.
+        AuthError: If api_url/username/password can't be resolved, or if
+            authentication fails.
 
     Example::
 
@@ -251,13 +337,17 @@ class PetroDB:
         # allow writes
         with PetroDB(url, user, pw, read_only=False) as db:
             db.create_project("New project")
+
+        # resolved from PETRODBAPI/PETRODBUSER/PETRODBPASSWORD env vars or .env
+        with PetroDB() as db:
+            ...
     """
 
     def __init__(
         self,
-        api_url: str,
-        username: str,
-        password: str,
+        api_url: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
         timeout: int = 30,
         read_only: bool = True,
     ):

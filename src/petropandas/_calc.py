@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pandas as pd
 
 from petropandas._core import (
@@ -12,6 +13,7 @@ from petropandas._core import (
     _detect_col,
     _element_charge,
     _element_of,
+    _formula_cols,
     _ion_name,
     _ion_to_oxide,
     _is_oxide,
@@ -46,7 +48,7 @@ def _get_moles(df: pd.DataFrame, units: str) -> pd.DataFrame:
         df: DataFrame with oxide columns.
         units: Current units (``"wt%"`` or ``"moles"``).
     """
-    cols = _oxide_cols(df)
+    cols = _formula_cols(df)
     if units == "moles":
         return df[cols]
     return to_moles(df)
@@ -61,7 +63,7 @@ def to_moles(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame of molar proportions.
     """
-    cols = _oxide_cols(df)
+    cols = _formula_cols(df)
     mw = molecular_weights(cols)
     return df[cols].div(mw)
 
@@ -75,7 +77,7 @@ def to_oxides(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame of oxide weight percentages.
     """
-    cols = _oxide_cols(df)
+    cols = _formula_cols(df)
     mw = molecular_weights(cols)
     return df[cols].mul(mw)
 
@@ -121,6 +123,7 @@ def convert(
     from_unit: str | None = None,
     n_oxygens: int | float | None = None,
     n_cations: int | float | None = None,
+    total: float | pd.Series | None = None,
 ) -> pd.DataFrame:
     """Convert a DataFrame between unit systems (wt%, moles, APFU).
 
@@ -136,6 +139,10 @@ def convert(
             (unless found in ``df.attrs``).
         n_cations: Cation total for APFU normalisation.
             Mutually exclusive with *n_oxygens*.
+        total: When converting *from* ``"apfu"``, the analytical total to
+            rescale the reconstructed oxide wt% to.  When *None* (default)
+            falls back to ``df.attrs["petro_total"]``; if that is also
+            absent, the raw formula-unit masses are returned unscaled.
 
     Returns:
         Converted DataFrame.
@@ -174,7 +181,9 @@ def convert(
     # ---- apfu → … -----------------------------------------------------------
     if from_unit == "apfu":
         n_oxygens, n_cations = _resolve_apfu_params(df, n_oxygens, n_cations)
-        oxide_wt = from_apfu(df, n_oxygens=n_oxygens, n_cations=n_cations)
+        if total is None:
+            total = df.attrs.get("petro_total")
+        oxide_wt = from_apfu(df, n_oxygens=n_oxygens, n_cations=n_cations, total=total)
         if to_unit == "wt%":
             return oxide_wt
         # to_unit == "moles"
@@ -259,6 +268,8 @@ def to_apfu(
 
     Returns:
         DataFrame with ion-named columns (e.g. ``"Si{4+}"``, ``"Fe{2+}"``).
+        Non-oxide formula columns (e.g. ``"F"``, ``"Cl"``) are included
+        with APFU equal to their molar proportions (no oxygen normalization).
 
     Raises:
         ValueError: If both or neither of *n_oxygens*/*n_cations* are given.
@@ -267,22 +278,36 @@ def to_apfu(
         msg = "Specify exactly one of n_oxygens or n_cations"
         raise ValueError(msg)
 
-    cols = _oxide_cols(df)
+    oxide_cols = _oxide_cols(df)
+    all_formula = _formula_cols(df)
+    elem_cols = [c for c in all_formula if c not in oxide_cols]
+
     moles = _get_moles(df, units)
-    cations_per = pd.Series({c: _cations_per(c) for c in cols}, dtype=float)
-    cat = moles.mul(cations_per)
 
-    if n_oxygens is not None:
-        oxygens_per = pd.Series({c: _oxygens_per(c) for c in cols}, dtype=float)
-        oxy = moles.mul(oxygens_per)
-        factor = n_oxygens / oxy.sum(axis=1)
+    if oxide_cols:
+        cations_per = pd.Series({c: _cations_per(c) for c in oxide_cols}, dtype=float)
+        cat = moles[oxide_cols].mul(cations_per)
+
+        if n_oxygens is not None:
+            oxygens_per = pd.Series(
+                {c: _oxygens_per(c) for c in oxide_cols}, dtype=float
+            )
+            oxy = moles[oxide_cols].mul(oxygens_per)
+            factor = n_oxygens / oxy.sum(axis=1)
+        else:
+            factor = n_cations / cat.sum(axis=1)
+
+        oxide_apfu = cat.mul(factor, axis=0)
+        rename = {col: _oxide_to_ion_col(col) for col in oxide_cols}
+        oxide_apfu = oxide_apfu.rename(columns=rename)
     else:
-        factor = n_cations / cat.sum(axis=1)
+        oxide_apfu = pd.DataFrame(index=df.index)
 
-    oxide_apfu = cat.mul(factor, axis=0)
+    if elem_cols:
+        elem_apfu = moles[elem_cols].copy()
+        oxide_apfu = pd.concat([oxide_apfu, elem_apfu], axis=1)
 
-    rename = {col: _oxide_to_ion_col(col) for col in oxide_apfu.columns}
-    return oxide_apfu.rename(columns=rename)
+    return oxide_apfu
 
 
 def to_apfu_by_charge(
@@ -405,17 +430,199 @@ def from_apfu(
 
 
 def normalize(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalise oxide columns so each row sums to 100%.
+    """Normalise formula columns so each row sums to 100%.
 
     Args:
-        df: DataFrame with oxide columns (wt% or molar proportions).
+        df: DataFrame with formula columns (wt% or molar proportions).
 
     Returns:
         Normalised DataFrame.
     """
-    cols = _oxide_cols(df)
+    cols = _formula_cols(df)
     total = df[cols].sum(axis=1)
     return df[cols].div(total, axis=0) * 100.0
+
+
+# ---------------------------------------------------------------------------
+# Stoichiometry scoring — used by MineralAccessor.check_stoichiometry
+# ---------------------------------------------------------------------------
+
+
+def _score_trapezoidal(value, ideal_low, ideal_high, margin=1.5):
+    """Score *value* on a 0-1 trapezoidal scale.
+
+    Returns 1.0 when *value* is inside ``[ideal_low, ideal_high]``,
+    linearly decays to 0.0 at ``ideal_low - margin`` or
+    ``ideal_high + margin``, and 0.0 outside the acceptable range.
+
+    Args:
+        value: Measured value to score.
+        ideal_low: Lower bound of the perfect range.
+        ideal_high: Upper bound of the perfect range.
+        margin: Width of the linear decay zone on each side.
+
+    Returns:
+        Score between 0.0 and 1.0.
+    """
+    if ideal_low <= value <= ideal_high:
+        return 1.0
+    if value < ideal_low:
+        return max(0.0, (value - (ideal_low - margin)) / margin)
+    return max(0.0, ((ideal_high + margin) - value) / margin)
+
+
+def score_analytical_total(
+    oxide_total: pd.Series, ideal_range: tuple[float, float]
+) -> pd.Series:
+    """Score oxide wt% total against a mineral's ideal analytical-total range.
+
+    Args:
+        oxide_total: Per-analysis sum of oxide wt% columns.
+        ideal_range: ``(low, high)`` bounds of the perfect-fit range.
+
+    Returns:
+        Series of trapezoidal scores (0-1), indexed like *oxide_total*.
+    """
+    ideal_low, ideal_high = ideal_range
+    return oxide_total.map(lambda v: _score_trapezoidal(v, ideal_low, ideal_high))
+
+
+def score_cation_deviation(
+    apfu_df: pd.DataFrame, ideal_cations: float | None
+) -> pd.Series:
+    """Score total APFU against a mineral's ideal cation count.
+
+    Args:
+        apfu_df: APFU DataFrame (one row per analysis).
+        ideal_cations: Ideal cation total, or *None* if the mineral does
+            not define one (all-NaN result).
+
+    Returns:
+        Series of scores (0-1), 1.0 at the ideal cation total.
+    """
+    if ideal_cations is None:
+        return pd.Series(np.nan, index=apfu_df.index)
+    apfu_sum = apfu_df.sum(axis=1)
+    return (1.0 - (apfu_sum - ideal_cations).abs() / ideal_cations).clip(lower=0.0)
+
+
+def score_charge_balance(apfu_df: pd.DataFrame, n_oxygens: float) -> pd.Series:
+    """Score total positive charge against the charge expected from *n_oxygens*.
+
+    Args:
+        apfu_df: APFU DataFrame with ion- or oxide-named columns.
+        n_oxygens: Number of oxygens per formula unit.
+
+    Returns:
+        Series of scores (0-1), exponentially decaying with the charge
+        residual.
+    """
+    charges = {col: (_parse_ion(col) or (None, 0))[1] for col in apfu_df.columns}
+    total_charge = apfu_df.mul(pd.Series(charges)).sum(axis=1)
+    expected = 2.0 * n_oxygens
+    residuals = (total_charge - expected).abs()
+    return np.exp(-residuals / 0.5)
+
+
+def score_fe3_validity(apfu_df: pd.DataFrame, fe_split_ok: bool) -> pd.Series:
+    """Binary check that Fe{3+}/Fe{2+} are non-negative after valence splitting.
+
+    Args:
+        apfu_df: APFU DataFrame.
+        fe_split_ok: Whether a Fe valence split was actually performed
+            for this mineral/analysis.
+
+    Returns:
+        Series of 1.0/0.0, or all-NaN if no Fe split applies.
+    """
+    fe3_col, fe2_col = "Fe{3+}", "Fe{2+}"
+    if not fe_split_ok or fe3_col not in apfu_df.columns:
+        return pd.Series(np.nan, index=apfu_df.index)
+    valid = apfu_df[fe3_col] >= 0
+    if fe2_col in apfu_df.columns:
+        valid = valid & (apfu_df[fe2_col] >= 0)
+    return valid.astype(float)
+
+
+def score_site_vacancies(
+    site_alloc: pd.DataFrame, site_definitions: list[dict]
+) -> pd.Series:
+    """Score mean site occupancy from a site-allocation DataFrame.
+
+    Args:
+        site_alloc: Site-allocation DataFrame with ``(site, cation)``
+            hierarchical columns, including ``"_unallocated"`` rows per site.
+        site_definitions: Mineral's site definitions (``{"name", "capacity", ...}``).
+
+    Returns:
+        Series of scores (0-1), or all-NaN if no site has vacancy data.
+    """
+    unalloc_cols = [c for c in site_alloc.columns if c[1] == "_unallocated"]
+    if not unalloc_cols:
+        return pd.Series(np.nan, index=site_alloc.index)
+    capacities = [
+        site_def["capacity"]
+        for col in unalloc_cols
+        for site_def in site_definitions
+        if site_def["name"] == col[0] and site_def["capacity"] > 0
+    ]
+    if not capacities:
+        return pd.Series(np.nan, index=site_alloc.index)
+    mean_cap = sum(capacities) / len(capacities)
+    mean_unalloc = site_alloc[unalloc_cols].mean(axis=1)
+    return (1.0 - mean_unalloc / mean_cap).clip(lower=0.0)
+
+
+def score_leftover_cations(
+    apfu_df: pd.DataFrame, site_alloc: pd.DataFrame
+) -> pd.Series:
+    """Score the fraction of total APFU assigned to a structural site.
+
+    Args:
+        apfu_df: APFU DataFrame.
+        site_alloc: Site-allocation DataFrame with ``(site, cation)``
+            hierarchical columns.
+
+    Returns:
+        Series of scores (0-1), or all-NaN if the mineral defines no sites.
+    """
+    site_cols = [c for c in site_alloc.columns if c[1] != "_unallocated"]
+    if not site_cols:
+        return pd.Series(np.nan, index=apfu_df.index)
+    total_ions = apfu_df.sum(axis=1)
+    allocated = site_alloc[site_cols].sum(axis=1)
+    safe_total = total_ions.replace(0, 1)
+    leftover_frac = ((total_ions - allocated) / safe_total).clip(lower=0.0)
+    return (1.0 - leftover_frac).clip(lower=0.0)
+
+
+def score_tetrahedral_fill(
+    site_alloc: pd.DataFrame, site_definitions: list[dict]
+) -> pd.Series:
+    """Score the T-site cation sum against its capacity.
+
+    Args:
+        site_alloc: Site-allocation DataFrame with ``(site, cation)``
+            hierarchical columns.
+        site_definitions: Mineral's site definitions; the first entry whose
+            ``name`` starts with ``"T"`` is treated as the tetrahedral site.
+
+    Returns:
+        Series of scores (0-1), or all-NaN if no T-site is defined.
+    """
+    t_site_def = next((s for s in site_definitions if s["name"].startswith("T")), None)
+    if t_site_def is None:
+        return pd.Series(np.nan, index=site_alloc.index)
+    t_cols = [
+        c
+        for c in site_alloc.columns
+        if c[0] == t_site_def["name"] and c[1] != "_unallocated"
+    ]
+    if not t_cols:
+        return pd.Series(np.nan, index=site_alloc.index)
+    t_sum = site_alloc[t_cols].sum(axis=1)
+    capacity = t_site_def["capacity"]
+    return t_sum.map(lambda s: _score_trapezoidal(s, capacity, capacity, margin=0.15))
 
 
 # ---------------------------------------------------------------------------
@@ -862,8 +1069,6 @@ _CIPW_INPUTS: list[str] = [
 def _norm_oxide_moles(df: pd.DataFrame) -> pd.DataFrame:
     """Convert bulk wt% to molar proportions for the CIPW mole table."""
     moles = to_moles(df)
-    for col in ("F", "S"):
-        moles[col] = df[col] / MW(col) if col in df.columns else 0.0
     for col in _CIPW_INPUTS:
         if col not in moles.columns:
             moles[col] = 0.0
@@ -987,13 +1192,27 @@ def _cipw_final(y: dict[str, float], normsum: bool) -> dict[str, float]:
     return result
 
 
-def _cipw_norm_row(
-    ox: dict[str, float],
-    normsum: bool,
-    cancrinite: bool,
-    spinel: bool,
-) -> dict[str, float]:
-    """Compute one row of the standard CIPW norm from molar proportions."""
+def _cipw_common_allocations(
+    ox: dict[str, float], result_names: list[str], cancrinite: bool
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Run the CIPW allocation steps shared by the standard and hb norms.
+
+    Both `CIPW.r` and `CIPWhb.r` assign apatite, fluorite, pyrite,
+    (optional) cancrinite, calcite, ilmenite, orthoclase, and albite
+    identically before diverging into their distinct mafic-mineral
+    cascades — this covers that shared prefix.
+
+    Args:
+        ox: One row of molar oxide proportions (see `_cipw_norm_row`).
+        result_names: `CIPW_RESULT_NAMES` or `CIPWHB_RESULT_NAMES`, used to
+            pre-populate the result dict with the variant's own keys.
+        cancrinite: If True, form cancrinite (Nc) from Na2O + CO2.
+
+    Returns:
+        Tuple of the partially-filled `y` result dict and a `remaining`
+        dict of the oxide moles (`si`, `ti`, `al`, `fe3`, `fe2`, `mg`,
+        `ca`, `na`) still needed by the caller's divergent continuation.
+    """
     si = ox["SiO2"]
     ti = ox["TiO2"]
     al = ox["Al2O3"]
@@ -1010,7 +1229,7 @@ def _cipw_norm_row(
     s = ox["S"]
     fe2 = fe2 + mn
 
-    y = dict.fromkeys(CIPW_RESULT_NAMES + ["mgr", "fer", "femg"], 0.0)
+    y = dict.fromkeys(result_names + ["mgr", "fer", "femg"], 0.0)
 
     if ca >= 10 / 3 * p:
         y["Ap"] = p
@@ -1089,6 +1308,24 @@ def _cipw_norm_row(
         na = na - y["Ab"]
         si = si - 6 * y["Ab"]
         al = 0
+
+    remaining = {
+        "si": si, "ti": ti, "al": al, "fe3": fe3,
+        "fe2": fe2, "mg": mg, "ca": ca, "na": na,
+    }  # fmt: skip
+    return y, remaining
+
+
+def _cipw_norm_row(
+    ox: dict[str, float],
+    normsum: bool,
+    cancrinite: bool,
+    spinel: bool,
+) -> dict[str, float]:
+    """Compute one row of the standard CIPW norm from molar proportions."""
+    y, r = _cipw_common_allocations(ox, CIPW_RESULT_NAMES, cancrinite)
+    si, ti, al = r["si"], r["ti"], r["al"]
+    fe3, fe2, mg, ca, na = r["fe3"], r["fe2"], r["mg"], r["ca"], r["na"]
 
     if na >= fe3:
         y["Ac"] = fe3
@@ -1283,101 +1520,9 @@ def _cipwhb_norm_row(
     spinel: bool,
 ) -> dict[str, float]:
     """Compute one row of the CIPWhb norm from molar proportions."""
-    si = ox["SiO2"]
-    ti = ox["TiO2"]
-    al = ox["Al2O3"]
-    fe3 = ox["Fe2O3"]
-    fe2 = ox["FeO"]
-    mn = ox["MnO"]
-    mg = ox["MgO"]
-    ca = ox["CaO"]
-    na = ox["Na2O"]
-    k = ox["K2O"]
-    co2 = ox["CO2"]
-    p = ox["P2O5"]
-    fl = ox["F"]
-    s = ox["S"]
-    fe2 = fe2 + mn
-
-    y = dict.fromkeys(CIPWHB_RESULT_NAMES + ["mgr", "fer", "femg"], 0.0)
-
-    if ca >= 10 / 3 * p:
-        y["Ap"] = p
-        ca = ca - y["Ap"] * 10 / 3
-    else:
-        y["Ap"] = 3 / 10 * ca
-        p = p - y["Ap"]
-        ca = 0
-
-    if fl >= 2 / 3 * y["Ap"] and not math.isnan(fl):
-        fl = fl - 2 / 3 * y["Ap"]
-    else:
-        fl = 0
-
-    if ca >= 0.5 * fl:
-        y["Fr"] = 0.5 * fl
-        ca = ca - y["Fr"]
-    else:
-        y["Fr"] = ca
-        fl = fl - 2 * y["Fr"]
-        ca = 0
-
-    if not math.isnan(s):
-        if fe2 >= 0.5 * s:
-            y["Py"] = 0.5 * s
-            fe2 = fe2 - y["Py"]
-        else:
-            y["Py"] = fe2
-            s = s - 2 * y["Py"]
-            fe2 = 0
-
-    if cancrinite:
-        y["Nc"] = co2
-        na = na - y["Nc"]
-
-    if not math.isnan(co2):
-        if ca >= co2:
-            y["Cc"] = co2
-            ca = ca - y["Cc"]
-            co2 = 0
-        else:
-            y["Cc"] = ca
-            co2 = co2 - y["Cc"]
-            ca = 0
-
-    if fe2 >= ti:
-        y["Il"] = ti
-        fe2 = fe2 - y["Il"]
-        ti = 0
-    else:
-        y["Il"] = fe2
-        ti = ti - y["Il"]
-        fe2 = 0
-
-    if al >= k:
-        y["Or"] = k
-        al = al - y["Or"]
-        si = si - 6 * y["Or"]
-        k = 0
-    else:
-        y["Or"] = al
-        k = k - y["Or"]
-        si = si - 6 * y["Or"]
-        al = 0
-        y["Ks"] = k
-        si = si - y["Ks"]
-        k = 0
-
-    if al >= na:
-        y["Ab"] = na
-        al = al - y["Ab"]
-        si = si - 6 * y["Ab"]
-        na = 0
-    else:
-        y["Ab"] = al
-        na = na - y["Ab"]
-        si = si - 6 * y["Ab"]
-        al = 0
+    y, r = _cipw_common_allocations(ox, CIPWHB_RESULT_NAMES, cancrinite)
+    si, al = r["si"], r["al"]
+    fe3, fe2, mg, ca, na = r["fe3"], r["fe2"], r["mg"], r["ca"], r["na"]
 
     # Ribeckite: Na-Fe3+-Fe2+ NaFe{3+}Si2O6 vs Na(Fe2+3)Si8O22(OH)2
     if fe3 <= fe2 / 3:
@@ -1757,7 +1902,8 @@ def cipw_norm_simple(df: pd.DataFrame) -> pd.DataFrame:
     p2o5 = mol["P2O5"]
     cr2o3 = mol["Cr2O3"]
 
-    z = lambda: pd.Series(0.0, index=idx)  # noqa: E731
+    def z() -> pd.Series:
+        return pd.Series(0.0, index=idx)
 
     # ---- 2. normative minerals (assigned in stoichiometric order) -----------
 

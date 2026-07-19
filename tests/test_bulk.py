@@ -39,6 +39,90 @@ class TestBulkAccessor:
         result = granite_bulk.bulk()
         assert list(result.columns) == list(granite_bulk.columns)
 
+    def test_element_columns_pass_through(self) -> None:
+        df = pd.DataFrame(
+            {"SiO2": [70.0], "Al2O3": [14.0], "F": [0.3], "S": [0.05], "Cl": [0.01]}
+        )
+        result = df.bulk()
+        assert "F" in result.columns
+        assert "S" in result.columns
+        assert "Cl" in result.columns
+
+    def test_element_columns_fillna_clip(self) -> None:
+        df = pd.DataFrame(
+            {
+                "SiO2": [70.0],
+                "Al2O3": [14.0],
+                "F": [float("nan")],
+                "S": [-0.5],
+            }
+        )
+        result = df.bulk()
+        assert result["F"].iloc[0] == 0.0
+        assert result["S"].iloc[0] == 0.0
+
+    def test_mean_includes_elements(self) -> None:
+        df = pd.DataFrame(
+            {
+                "SiO2": [70.0, 72.0],
+                "Al2O3": [14.0, 15.0],
+                "F": [0.3, 0.5],
+            }
+        )
+        result = df.bulk.mean()
+        assert "F" in result.columns
+        assert result["F"].iloc[0] == pytest.approx(0.4)
+
+    def test_normalized_sums_to_100(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.normalized()
+        assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
+
+    def test_normalized_preserves_units(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.normalized()
+        assert result.attrs.get("petro_units") == "wt%"
+
+    def test_normalized_retains_elements(self) -> None:
+        df = pd.DataFrame({"SiO2": [70.0], "Al2O3": [14.0], "F": [0.3]})
+        result = df.bulk.normalized()
+        assert "F" in result.columns
+        assert result["F"].iloc[0] > 0
+        assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
+
+
+# ---------------------------------------------------------------------------
+# BulkAccessor.reframe
+# ---------------------------------------------------------------------------
+
+
+class TestReframe:
+    def test_existing_columns_kept(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.reframe(["SiO2", "Al2O3"])
+        assert list(result.columns) == ["SiO2", "Al2O3"]
+        pd.testing.assert_series_equal(
+            result["SiO2"], granite_bulk["SiO2"], check_names=False
+        )
+
+    def test_missing_columns_zero(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.reframe(["SiO2", "F", "Cl"])
+        assert "F" in result.columns
+        assert "Cl" in result.columns
+        assert (result["F"] == 0.0).all()
+        assert (result["Cl"] == 0.0).all()
+
+    def test_column_order_matches_argument(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.reframe(["Al2O3", "SiO2"])
+        assert list(result.columns) == ["Al2O3", "SiO2"]
+
+    def test_index_preserved(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.reframe(["SiO2", "F"])
+        pd.testing.assert_index_equal(result.index, granite_bulk.index)
+
+    def test_all_missing(self) -> None:
+        df = pd.DataFrame({"SiO2": [70.0], "FeO": [5.0]})
+        result = df.bulk.reframe(["F", "Cl", "S"])
+        assert list(result.columns) == ["F", "Cl", "S"]
+        assert (result == 0.0).all().all()
+
 
 # ---------------------------------------------------------------------------
 # CIPW norm

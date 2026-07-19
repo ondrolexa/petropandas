@@ -12,6 +12,10 @@ src = res.joinpath("bulk.csv")
 with importlib.resources.as_file(src) as f:
     bulk = pd.read_csv(f)
 
+src = res.joinpath("sazava.csv")
+with importlib.resources.as_file(src) as f:
+    sazava = pd.read_csv(f)
+
 src = res.joinpath("grt_profile.csv")
 with importlib.resources.as_file(src) as f:
     grt_profile = pd.read_csv(f)
@@ -23,6 +27,7 @@ with importlib.resources.as_file(src) as f:
 __all__ = [
     "avgpelite",
     "bulk",
+    "sazava",
     "grt_profile",
     "minerals",
 ]

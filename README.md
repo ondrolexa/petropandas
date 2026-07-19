@@ -129,16 +129,16 @@ accept an optional `order_parameters` dict, passed through
 | `df.moles()` | Return oxide columns as molar proportions |
 | `df.moles.normalized()` | Normalise molar proportions to sum to 100% |
 
-### ApfuAccessor (`df.apfu`)
+### CationsAccessor (`df.cations`)
 
 | Method | Description |
 |--------|-------------|
-| `df.apfu(n_oxygens=N)` | Atoms per formula unit (oxygen basis) |
-| `df.apfu(n_cations=N)` | Atoms per formula unit (cation basis) |
+| `df.cations(n_oxygens=N)` | Atoms per formula unit (oxygen basis) |
+| `df.cations(n_cations=N)` | Atoms per formula unit (cation basis) |
 
 All callable accessors auto-convert from the current `petro_units` attr.
 Chains work seamlessly: `df.oxides().moles().oxides()` roundtrips back to wt%.
-`df.apfu(n_oxygens=N).oxides()` converts APFU back to oxide wt% (ratios preserved).
+`df.cations(n_oxygens=N).oxides()` converts APFU back to oxide wt% (ratios preserved).
 
 ### MineralAccessor (`df.mineral`)
 
@@ -213,6 +213,28 @@ fig, ax = s.render()
 
 All three inherit from `BasePlot` and share `add()`, `render()`, `show()`, and `savefig()` methods.
 
+## Configuration
+
+Global defaults are stored in the `ppconfig` singleton (`petropandas.PPConfig`):
+
+| Setting | Default | Controls |
+|---------|---------|----------|
+| `default_system` | `"MnNCKFMASHTO"` | Default thermodynamic system for TCbulk / Perplexbulk |
+| `default_oxygen` | `0.01` | Default ferric oxygen for TCbulk / Perplexbulk / MAGEMin |
+| `default_H2O` | `-1.0` | Default water wt% (-1 = auto from deficit) |
+| `default_db` | `"mp"` | Default MAGEMin database |
+| `default_sys_in` | `"mol"` | Default MAGEMin unit system |
+
+```python
+from petropandas import ppconfig
+
+ppconfig.default_db = "ig"
+ppconfig.default_system = "KFMASH"
+ppconfig.reset()  # restore all defaults
+```
+
+Mutations are global and persist for the session.
+
 ## Stoichiometry checking
 
 `df.mineral.check_stoichiometry(mineral)` returns a DataFrame scored 0–1 for each criterion:
@@ -243,6 +265,6 @@ Inapplicable criteria are dropped (all-NaN columns removed).
 - Ion column names use periodictable notation: `Fe{2+}`, `Fe{3+}`, `Si{4+}`, `Na{+}`
 - Structural formula columns: `(site, cation)` tuples (e.g. `("Z", "Si{4+}")`, `("X", "Fe{2+}")`)
 - Unit tracking via `df.attrs["petro_units"]`: `"wt%"` (default) → `"moles"` → `"apfu"`
-- Callable accessors (`df.oxides()`, `df.moles()`, `df.apfu()`) auto-convert from current units
+- Callable accessors (`df.oxides()`, `df.moles()`, `df.cations()`) auto-convert from current units
 - `Mineral` instances are configuration objects — stateless, reusable
 - Internal modules are underscore-prefixed (`_calc.py`, `_core.py`, `_minerals.py`, `_plotting.py`)
