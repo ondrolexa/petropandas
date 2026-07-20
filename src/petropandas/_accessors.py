@@ -7,10 +7,12 @@ import warnings
 import pandas as pd
 
 import petropandas._calc as _calc
+from petropandas._config import ppconfig
+from petropandas._core import ALIASES
+from petropandas._core import _formula_cols as _core_formula_cols
 from petropandas._core import _is_oxide as _core_is_oxide
 from petropandas._core import _oxide_cols as _core_oxide_cols
-from petropandas._core import _parse_ion
-from petropandas._minerals import Mineral, _score_trapezoidal
+from petropandas._minerals import Mineral
 
 
 # ---------------------------------------------------------------------------
@@ -97,16 +99,34 @@ def _needs_cleanup(obj: pd.DataFrame) -> bool:
 
 
 def _clean_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Strip whitespace, apply ALIASES, fill NaN, clip negatives on oxides."""
-    from petropandas._core import ALIASES
-
+    """Strip whitespace, apply ALIASES, fill NaN, clip negatives on formula columns."""
     work = df.copy()
     work.columns = [str(c).strip() for c in work.columns]
     work = work.rename(columns=ALIASES)
-    oxide_cols = _core_oxide_cols(work)
-    if oxide_cols:
-        work[oxide_cols] = work[oxide_cols].fillna(0).clip(lower=0)
+    formula_cols = _core_formula_cols(work)
+    if formula_cols:
+        work[formula_cols] = work[formula_cols].fillna(0).clip(lower=0)
     return work
+
+
+def _reframe_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """Return *df* restricted to *columns*, filling any missing ones with 0.0."""
+    return pd.DataFrame(
+        {col: df[col] if col in df.columns else 0.0 for col in columns},
+        index=df.index,
+    )
+
+
+class _CleaningAccessor:
+    """Shared constructor for all petropandas DataFrame accessors.
+
+    Cleans raw user data (strip column names, apply ``ALIASES``, fill/clip
+    formula columns) on first access; DataFrames that already carry
+    ``petro_units`` are assumed already clean and are just copied.
+    """
+
+    def __init__(self, obj: pd.DataFrame) -> None:
+        self._obj = _clean_df(obj) if _needs_cleanup(obj) else obj.copy()
 
 
 # ---------------------------------------------------------------------------
@@ -115,11 +135,8 @@ def _clean_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @pd.api.extensions.register_dataframe_accessor("mineral")
-class MineralAccessor:
+class MineralAccessor(_CleaningAccessor):
     """General-purpose accessor for microprobe DataFrames (``df.mineral``)."""
-
-    def __init__(self, obj: pd.DataFrame) -> None:
-        self._obj = _clean_df(obj) if _needs_cleanup(obj) else obj.copy()
 
     # -- helpers -------------------------------------------------------------
 
@@ -174,131 +191,39 @@ class MineralAccessor:
         * ``tetrahedral_fill`` — T-site sum vs T-site capacity (NaN if no
           T-site defined).
         """
-        import numpy as np
-
         df = self._obj
         oxide_cols = self._oxide_cols()
         units = self._units()
-        idx = df.index
 
-        # -- intermediates ---------------------------------------------------
         try:
             apfu_df = mineral._raw_apfu(df, units=units)
             fe_split_ok = True
         except KeyError:
             apfu_df = _calc.to_apfu(df, n_oxygens=mineral.n_oxygens, units=units)
             fe_split_ok = False
-        sf = mineral._allocate_sites(apfu_df)
+        site_alloc = mineral._allocate_sites(apfu_df)
 
-        # -- 1. analytical_total ---------------------------------------------
-        total = df[oxide_cols].sum(axis=1)
-        ideal_low, ideal_high = mineral.analytical_total_range
-        at_scores = [_score_trapezoidal(v, ideal_low, ideal_high) for v in total]
-
-        # -- 2. cation_deviation ---------------------------------------------
-        apfu_sum = apfu_df.sum(axis=1)
-        if mineral.ideal_cations is not None:
-            cat_scores = [
-                max(0.0, 1.0 - abs(s - mineral.ideal_cations) / mineral.ideal_cations)
-                for s in apfu_sum
-            ]
-        else:
-            cat_scores = [np.nan] * len(idx)
-
-        # -- 3. charge_balance -----------------------------------------------
-        charges = {}
-        for col in apfu_df.columns:
-            parsed = _parse_ion(col)
-            charges[col] = parsed[1] if parsed is not None else 0
-        total_charge = apfu_df.mul(pd.Series(charges)).sum(axis=1)
-        expected = 2.0 * mineral.n_oxygens
-        residuals = (total_charge - expected).abs()
-        cb_scores = [float(np.exp(-r / 0.5)) for r in residuals]
-
-        # -- 4. fe3+_validity ------------------------------------------------
-        fe3_col = "Fe{3+}"
-        fe2_col = "Fe{2+}"
-        if fe_split_ok and fe3_col in apfu_df.columns:
-            fe_valid = (
-                (apfu_df[fe3_col] >= 0).values
-                if fe2_col not in apfu_df.columns
-                else ((apfu_df[fe3_col] >= 0) & (apfu_df[fe2_col] >= 0)).values
-            )
-            fe_scores = [1.0 if v else 0.0 for v in fe_valid]
-        else:
-            fe_scores = [np.nan] * len(idx)
-
-        # -- 5. site_vacancies -----------------------------------------------
-        unalloc_cols = [c for c in sf.columns if c[1] == "_unallocated"]
-        site_cols = [c for c in sf.columns if c[1] != "_unallocated"]
-        if unalloc_cols:
-            capacities = []
-            for col in unalloc_cols:
-                site_name = col[0]
-                cap = next(
-                    (
-                        s["capacity"]
-                        for s in mineral.site_definitions
-                        if s["name"] == site_name
-                    ),
-                    None,
-                )
-                if cap is not None and cap > 0:
-                    capacities.append(cap)
-            if capacities:
-                mean_cap = sum(capacities) / len(capacities)
-                mean_unalloc = sf[unalloc_cols].mean(axis=1)
-                sv_scores = [max(0.0, 1.0 - u / mean_cap) for u in mean_unalloc]
-            else:
-                sv_scores = [np.nan] * len(idx)
-        else:
-            sv_scores = [np.nan] * len(idx)
-
-        # -- 6. leftover_cations ---------------------------------------------
-        if site_cols:
-            total_ions = apfu_df.sum(axis=1)
-            allocated = sf[site_cols].sum(axis=1)
-            safe_total = total_ions.replace(0, 1)
-            leftover_frac = ((total_ions - allocated) / safe_total).clip(lower=0)
-            lc_scores = [max(0.0, 1.0 - f) for f in leftover_frac]
-        else:
-            lc_scores = [np.nan] * len(idx)
-
-        # -- 7. tetrahedral_fill ---------------------------------------------
-        t_site_def = next(
-            (s for s in mineral.site_definitions if s["name"].startswith("T")), None
-        )
-        if t_site_def is not None:
-            t_cols = [
-                c
-                for c in sf.columns
-                if c[0] == t_site_def["name"] and c[1] != "_unallocated"
-            ]
-            if t_cols:
-                t_sum = sf[t_cols].sum(axis=1)
-                tf_scores = [
-                    _score_trapezoidal(
-                        s, t_site_def["capacity"], t_site_def["capacity"], margin=0.15
-                    )
-                    for s in t_sum
-                ]
-            else:
-                tf_scores = [np.nan] * len(idx)
-        else:
-            tf_scores = [np.nan] * len(idx)
-
-        # -- assemble result -------------------------------------------------
         result = pd.DataFrame(
             {
-                "analytical_total": at_scores,
-                "cation_deviation": cat_scores,
-                "charge_balance": cb_scores,
-                "fe3+_validity": fe_scores,
-                "site_vacancies": sv_scores,
-                "leftover_cations": lc_scores,
-                "tetrahedral_fill": tf_scores,
+                "analytical_total": _calc.score_analytical_total(
+                    df[oxide_cols].sum(axis=1), mineral.analytical_total_range
+                ),
+                "cation_deviation": _calc.score_cation_deviation(
+                    apfu_df, mineral.ideal_cations
+                ),
+                "charge_balance": _calc.score_charge_balance(
+                    apfu_df, mineral.n_oxygens
+                ),
+                "fe3+_validity": _calc.score_fe3_validity(apfu_df, fe_split_ok),
+                "site_vacancies": _calc.score_site_vacancies(
+                    site_alloc, mineral.site_definitions
+                ),
+                "leftover_cations": _calc.score_leftover_cations(apfu_df, site_alloc),
+                "tetrahedral_fill": _calc.score_tetrahedral_fill(
+                    site_alloc, mineral.site_definitions
+                ),
             },
-            index=idx,
+            index=df.index,
         )
         return result.dropna(axis=1, how="all")
 
@@ -309,33 +234,17 @@ class MineralAccessor:
 
 
 @pd.api.extensions.register_dataframe_accessor("oxides")
-class OxidesAccessor:
+class OxidesAccessor(_CleaningAccessor):
     """Callable accessor (``df.oxides``).
 
     ``df.oxides()`` returns a copy of the DataFrame containing only
     recognised oxide columns, converted to wt% if necessary.
     """
 
-    def __init__(self, obj: pd.DataFrame) -> None:
-        self._obj = _clean_df(obj) if _needs_cleanup(obj) else obj.copy()
-
     def __call__(self) -> pd.DataFrame:
         """Return a copy with only recognised oxide columns in wt%."""
         units = self._obj.attrs.get("petro_units", "wt%")
-        if units == "wt%":
-            result = self._obj
-        elif units == "apfu":
-            n_oxygens = self._obj.attrs.get("petro_n_oxygens")
-            n_cations = self._obj.attrs.get("petro_n_cations")
-            if (n_oxygens is None) == (n_cations is None):
-                msg = "Cannot convert APFU to wt% without n_oxygens or n_cations"
-                raise ValueError(msg)
-            total = self._obj.attrs.get("petro_total")
-            result = _calc.from_apfu(
-                self._obj, n_oxygens=n_oxygens, n_cations=n_cations, total=total
-            )
-        else:
-            result = _calc.convert(self._obj, "wt%", from_unit=units)
+        result = _calc.convert(self._obj, "wt%", from_unit=units)
         cols = _core_oxide_cols(result)
         out = result[cols].copy()
         out.attrs["petro_units"] = "wt%"
@@ -354,7 +263,7 @@ class OxidesAccessor:
 
     def normalized(self) -> pd.DataFrame:
         """Normalise oxide wt% so each row sums to 100 %."""
-        result = _calc.normalize(self._obj)
+        result = _calc.normalize(self())
         result.attrs["petro_units"] = "wt%"
         return result
 
@@ -436,7 +345,7 @@ class OxidesAccessor:
         Returns:
             DataFrame with split oxide columns in wt%.
         """
-        moles_df = _calc.convert(self._obj, "moles")
+        moles_df = _calc.convert(self(), "moles")
         result_moles = _calc.oxidize_moles(moles_df, o_excess)
         result = _calc.convert(result_moles, "wt%", from_unit="moles")
         result.attrs["petro_units"] = "wt%"
@@ -450,7 +359,7 @@ class OxidesAccessor:
         Returns:
             DataFrame with all iron as FeO in wt%.
         """
-        result = _calc.fe2o3_to_feo(self._obj)
+        result = _calc.fe2o3_to_feo(self())
         result.attrs["petro_units"] = "wt%"
         return result
 
@@ -464,7 +373,7 @@ class OxidesAccessor:
         Returns:
             Corrected copy with reduced CaO and P₂O₅ = 0.
         """
-        result = _calc.apatite_correction(self._obj)
+        result = _calc.apatite_correction(self())
         result.attrs["petro_units"] = "wt%"
         return result
 
@@ -529,37 +438,21 @@ class OxidesAccessor:
 
 
 @pd.api.extensions.register_dataframe_accessor("moles")
-class MolesAccessor:
+class MolesAccessor(_CleaningAccessor):
     """Callable accessor (``df.moles``).
 
     ``df.moles()`` returns a copy with oxide columns as molar proportions.
     Auto-converts from the current ``petro_units`` (default: wt%).
     """
 
-    def __init__(self, obj: pd.DataFrame) -> None:
-        self._obj = _clean_df(obj) if _needs_cleanup(obj) else obj.copy()
-
     def __call__(self) -> pd.DataFrame:
         """Return oxide columns as molar proportions."""
         units = self._obj.attrs.get("petro_units", "wt%")
-        if units == "moles":
-            cols = _core_oxide_cols(self._obj)
-            result = self._obj[cols].copy()
-        elif units == "apfu":
-            n_oxygens = self._obj.attrs.get("petro_n_oxygens")
-            n_cations = self._obj.attrs.get("petro_n_cations")
-            if (n_oxygens is None) == (n_cations is None):
-                msg = "Cannot convert APFU to moles without n_oxygens or n_cations"
-                raise ValueError(msg)
-            total = self._obj.attrs.get("petro_total")
-            oxide_wt = _calc.from_apfu(
-                self._obj, n_oxygens=n_oxygens, n_cations=n_cations, total=total
-            )
-            result = _calc.convert(oxide_wt, "moles")
-        else:
-            result = _calc.convert(self._obj, "moles", from_unit=units)
-        result.attrs["petro_units"] = "moles"
-        return result
+        result = _calc.convert(self._obj, "moles", from_unit=units)
+        cols = _core_formula_cols(result)
+        out = result[cols].copy()
+        out.attrs["petro_units"] = "moles"
+        return out
 
     def normalized(self) -> pd.DataFrame:
         """Normalize moles to 100 mol%."""
@@ -569,21 +462,18 @@ class MolesAccessor:
 
 
 # ---------------------------------------------------------------------------
-# ApfuAccessor — callable, returns APFU DataFrame
+# CationsAccessor — callable, returns APFU DataFrame
 # ---------------------------------------------------------------------------
 
 
-@pd.api.extensions.register_dataframe_accessor("apfu")
-class ApfuAccessor:
-    """Callable accessor (``df.apfu``).
+@pd.api.extensions.register_dataframe_accessor("cations")
+class CationsAccessor(_CleaningAccessor):
+    """Callable accessor (``df.cations``).
 
-    ``df.apfu(n_oxygens=N)`` or ``df.apfu(n_cations=N)`` returns atoms
+    ``df.cations(n_oxygens=N)`` or ``df.cations(n_cations=N)`` returns atoms
     per formula unit.  Auto-converts from the current ``petro_units``
     (default: wt%).
     """
-
-    def __init__(self, obj: pd.DataFrame) -> None:
-        self._obj = _clean_df(obj) if _needs_cleanup(obj) else obj.copy()
 
     def __call__(
         self,
@@ -627,7 +517,7 @@ class ApfuAccessor:
 
 
 @pd.api.extensions.register_dataframe_accessor("bulk")
-class BulkAccessor:
+class BulkAccessor(_CleaningAccessor):
     """Bulk-rock geochemistry (``df.bulk``).
 
     ``df.bulk()`` returns a cleaned copy of the DataFrame in wt%.
@@ -635,15 +525,34 @@ class BulkAccessor:
     ratio calculations for whole-rock major-oxide data.
     """
 
-    def __init__(self, obj: pd.DataFrame) -> None:
-        self._obj = _clean_df(obj) if _needs_cleanup(obj) else obj.copy()
-
     def __call__(self) -> pd.DataFrame:
-        """Return a cleaned copy of the DataFrame in wt%."""
-        return self._obj.copy()
+        """Return a cleaned copy with only oxide and element columns in wt%."""
+        cols = _core_formula_cols(self._obj)
+        return self._obj[cols].copy()
 
-    def cipw(self) -> pd.DataFrame:
-        """Compute CIPW normative mineralogy.
+    def normalized(self) -> pd.DataFrame:
+        """Normalise wt% so each row sums to 100 %."""
+        result = _calc.normalize(self())
+        result.attrs["petro_units"] = "wt%"
+        return result
+
+    def reframe(self, columns: list[str]) -> pd.DataFrame:
+        """Return a DataFrame with exactly the requested columns.
+
+        Columns present in the underlying data are kept as-is.
+        Missing columns are filled with zeros.
+
+        Args:
+            columns: Ordered list of column names for the output.
+
+        Returns:
+            DataFrame with the same index as the input and columns
+            in the requested order.
+        """
+        return _reframe_columns(self._obj, columns)
+
+    def cipw_simple(self) -> pd.DataFrame:
+        """Compute CIPW normative mineralogy (simple version).
 
         Requires major oxides in wt% (at minimum SiO₂, Al₂O₃,
         Fe₂O₃, FeO, MgO, CaO, Na₂O, K₂O).  Missing optional
@@ -653,7 +562,80 @@ class BulkAccessor:
             DataFrame with normative mineral columns (Qz, Or, Ab,
             An, Di, Hy, Mt, Il, Ap, etc.) in wt%.
         """
-        return _calc.cipw_norm(self._obj)
+        return _calc.cipw_norm_simple(self())
+
+    def cipw(
+        self,
+        *,
+        normsum: bool = False,
+        cancrinite: bool = False,
+        spinel: bool = False,
+        complete_results: bool = False,
+    ) -> pd.DataFrame:
+        """Compute the standard CIPW norm (GCDkit-faithful).
+
+        Port of CIPW() from GCDkit/inst/Norms/CIPW.r.  Requires major
+        oxides in wt% (at minimum SiO₂, Al₂O₃, Fe₂O₃, FeO, MgO, CaO,
+        Na₂O, K₂O).  Missing optional oxides default to 0.
+
+        Args:
+            normsum: If True, normalise the norm so the mineral sum
+                equals 100.
+            cancrinite: If True, form cancrinite (Nc) from Na₂O + CO₂
+                before the calcite step.
+            spinel: If True, form spinel (Sp) from corundum + (Mg,Fe)O
+                when SiO₂ < 45 (molar).
+            complete_results: If True, keep all normative-mineral columns
+                including sub-mineral splits (En, Fs, Fo, Fa, MgDi,
+                FeDi) and columns that are zero for every sample.
+
+        Returns:
+            DataFrame indexed like the input, with normative-mineral
+            columns in wt% named per GCDkit convention (Q, Or, Ab, An,
+            Di, Hy, Mt, Il, Ap, …) plus a ``Total`` column.
+        """
+        return _calc.cipw_norm(
+            self(),
+            normsum=normsum,
+            cancrinite=cancrinite,
+            spinel=spinel,
+            complete_results=complete_results,
+        )
+
+    def cipwhb(
+        self,
+        *,
+        normsum: bool = False,
+        cancrinite: bool = False,
+        spinel: bool = False,
+        complete_results: bool = False,
+    ) -> pd.DataFrame:
+        """Compute the CIPW norm with hornblende/biotite recasting.
+
+        Port of CIPWhb() from GCDkit/inst/Norms/CIPWhb.r.  Mafic
+        components are recast into biotite (Bi) and hornblende (Hbl)
+        instead of diopside/hypersthene/olivine.
+
+        Args:
+            normsum: If True, normalise the norm so the mineral sum
+                equals 100.
+            cancrinite: If True, form cancrinite (Nc) from Na₂O + CO₂.
+            spinel: If True, form spinel when SiO₂ < 45 (molar).
+            complete_results: If True, keep all normative-mineral columns
+                including sub-mineral splits and zero-only columns.
+
+        Returns:
+            DataFrame indexed like the input, with normative-mineral
+            columns in wt% named per GCDkit convention (Q, Or, Ab, An,
+            Bi, Hbl, Act, Ed, …) plus a ``Total`` column.
+        """
+        return _calc.cipw_norm_hb(
+            self(),
+            normsum=normsum,
+            cancrinite=cancrinite,
+            spinel=spinel,
+            complete_results=complete_results,
+        )
 
     def alumina_saturation(self, classify: bool = False) -> pd.DataFrame:
         """Compute alumina saturation indices (A/NK, A/CNK).
@@ -688,7 +670,7 @@ class BulkAccessor:
         Returns:
             DataFrame with ratio columns.
         """
-        return _calc.oxide_ratios(self._obj)
+        return _calc.oxide_ratios(self())
 
     def mean(
         self, *, groupby: str | None = None, weights: str | None = None
@@ -717,7 +699,7 @@ class BulkAccessor:
             msg = f"Weights column {weights!r} not found in DataFrame"
             raise ValueError(msg)
 
-        cols = _core_oxide_cols(self._obj)
+        cols = _core_formula_cols(self._obj)
 
         if weights is None:
             if groupby is not None:
@@ -775,7 +757,7 @@ class BulkAccessor:
         Returns:
             DataFrame with columns in *system_cols* order.
         """
-        work = _calc.fe2o3_to_feo(self._obj)
+        work = _calc.fe2o3_to_feo(self())
         work = _calc.apatite_correction(work)
 
         # ---- H₂O handling --------------------------------------------------
@@ -801,21 +783,16 @@ class BulkAccessor:
         if oxygen_key in system_cols:
             work[oxygen_key] = oxygen * oxygen_mult
 
-        # ---- fill any missing columns with 0.0 -----------------------------
-        for col in system_cols:
-            if col not in work.columns:
-                work[col] = 0.0
-
-        return work[system_cols]
+        return _reframe_columns(work, system_cols)
 
     # -- THERMOCALC ----------------------------------------------------------
 
     def TCbulk(
         self,
         *,
-        system: str = "MnNCKFMASHTO",
-        oxygen: float = 0.01,
-        H2O: float = -1.0,
+        system: str = ppconfig.default_system,
+        oxygen: float = ppconfig.default_oxygen,
+        H2O: float = ppconfig.default_H2O,
         dataframe: bool = False,
     ) -> pd.DataFrame | None:
         """Print oxides formatted as a THERMOCALC bulk script.
@@ -863,9 +840,9 @@ class BulkAccessor:
     def Perplexbulk(
         self,
         *,
-        system: str = "MnNCKFMASHTO",
-        oxygen: float = 0.01,
-        H2O: float = -1.0,
+        system: str = ppconfig.default_system,
+        oxygen: float = ppconfig.default_oxygen,
+        H2O: float = ppconfig.default_H2O,
         dataframe: bool = False,
     ) -> pd.DataFrame | None:
         """Print oxides formatted as a PerpleX thermodynamic component list.
@@ -913,10 +890,10 @@ class BulkAccessor:
     def MAGEMin(
         self,
         *,
-        db: str = "mp",
-        sys_in: str = "mol",
-        oxygen: float = 0.01,
-        H2O: float = -1.0,
+        db: str = ppconfig.default_db,
+        sys_in: str = ppconfig.default_sys_in,
+        oxygen: float = ppconfig.default_oxygen,
+        H2O: float = ppconfig.default_H2O,
         title: str | None = None,
         comment: str = "petropandas",
         dataframe: bool = False,

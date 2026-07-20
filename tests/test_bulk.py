@@ -9,6 +9,8 @@ import petropandas  # noqa: F401 — triggers accessor registration
 from petropandas._calc import (
     alumina_saturation,
     cipw_norm,
+    cipw_norm_hb,
+    cipw_norm_simple,
     oxide_ratios,
 )
 
@@ -37,60 +39,144 @@ class TestBulkAccessor:
         result = granite_bulk.bulk()
         assert list(result.columns) == list(granite_bulk.columns)
 
+    def test_element_columns_pass_through(self) -> None:
+        df = pd.DataFrame(
+            {"SiO2": [70.0], "Al2O3": [14.0], "F": [0.3], "S": [0.05], "Cl": [0.01]}
+        )
+        result = df.bulk()
+        assert "F" in result.columns
+        assert "S" in result.columns
+        assert "Cl" in result.columns
+
+    def test_element_columns_fillna_clip(self) -> None:
+        df = pd.DataFrame(
+            {
+                "SiO2": [70.0],
+                "Al2O3": [14.0],
+                "F": [float("nan")],
+                "S": [-0.5],
+            }
+        )
+        result = df.bulk()
+        assert result["F"].iloc[0] == 0.0
+        assert result["S"].iloc[0] == 0.0
+
+    def test_mean_includes_elements(self) -> None:
+        df = pd.DataFrame(
+            {
+                "SiO2": [70.0, 72.0],
+                "Al2O3": [14.0, 15.0],
+                "F": [0.3, 0.5],
+            }
+        )
+        result = df.bulk.mean()
+        assert "F" in result.columns
+        assert result["F"].iloc[0] == pytest.approx(0.4)
+
+    def test_normalized_sums_to_100(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.normalized()
+        assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
+
+    def test_normalized_preserves_units(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.normalized()
+        assert result.attrs.get("petro_units") == "wt%"
+
+    def test_normalized_retains_elements(self) -> None:
+        df = pd.DataFrame({"SiO2": [70.0], "Al2O3": [14.0], "F": [0.3]})
+        result = df.bulk.normalized()
+        assert "F" in result.columns
+        assert result["F"].iloc[0] > 0
+        assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
+
+
+# ---------------------------------------------------------------------------
+# BulkAccessor.reframe
+# ---------------------------------------------------------------------------
+
+
+class TestReframe:
+    def test_existing_columns_kept(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.reframe(["SiO2", "Al2O3"])
+        assert list(result.columns) == ["SiO2", "Al2O3"]
+        pd.testing.assert_series_equal(
+            result["SiO2"], granite_bulk["SiO2"], check_names=False
+        )
+
+    def test_missing_columns_zero(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.reframe(["SiO2", "F", "Cl"])
+        assert "F" in result.columns
+        assert "Cl" in result.columns
+        assert (result["F"] == 0.0).all()
+        assert (result["Cl"] == 0.0).all()
+
+    def test_column_order_matches_argument(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.reframe(["Al2O3", "SiO2"])
+        assert list(result.columns) == ["Al2O3", "SiO2"]
+
+    def test_index_preserved(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.reframe(["SiO2", "F"])
+        pd.testing.assert_index_equal(result.index, granite_bulk.index)
+
+    def test_all_missing(self) -> None:
+        df = pd.DataFrame({"SiO2": [70.0], "FeO": [5.0]})
+        result = df.bulk.reframe(["F", "Cl", "S"])
+        assert list(result.columns) == ["F", "Cl", "S"]
+        assert (result == 0.0).all().all()
+
 
 # ---------------------------------------------------------------------------
 # CIPW norm
 # ---------------------------------------------------------------------------
 
 
-class TestCipwNorm:
+class TestCipwSimpleNorm:
     def test_granite_has_quartz(self, granite_bulk: pd.DataFrame) -> None:
-        result = granite_bulk.bulk.cipw()
-        assert "Qz" in result.columns
-        assert result["Qz"].iloc[0] > 0
+        result = granite_bulk.bulk.cipw_simple()
+        assert "Q" in result.columns
+        assert result["Q"].iloc[0] > 0
 
     def test_granite_has_feldspars(self, granite_bulk: pd.DataFrame) -> None:
-        result = granite_bulk.bulk.cipw()
+        result = granite_bulk.bulk.cipw_simple()
         assert "Or" in result.columns
         assert "Ab" in result.columns
         assert "An" in result.columns
 
     def test_basalt_has_diopside(self, basalt_bulk: pd.DataFrame) -> None:
-        result = basalt_bulk.bulk.cipw()
+        result = basalt_bulk.bulk.cipw_simple()
         assert "Di" in result.columns
         assert result["Di"].iloc[0] > 0
 
     def test_basalt_has_olivine_or_hypersthene(self, basalt_bulk: pd.DataFrame) -> None:
-        result = basalt_bulk.bulk.cipw()
+        result = basalt_bulk.bulk.cipw_simple()
         has_hy = "Hy" in result.columns and result["Hy"].iloc[0] > 0
         has_ol = "Ol" in result.columns and result["Ol"].iloc[0] > 0
         assert has_hy or has_ol
 
     def test_sums_approximately_100(self, granite_bulk: pd.DataFrame) -> None:
-        result = granite_bulk.bulk.cipw()
+        result = granite_bulk.bulk.cipw_simple()
         total = result.sum(axis=1).iloc[0]
         assert total == pytest.approx(100.0, abs=2.0)
 
     def test_basalt_sums_approximately_100(self, basalt_bulk: pd.DataFrame) -> None:
-        result = basalt_bulk.bulk.cipw()
+        result = basalt_bulk.bulk.cipw_simple()
         total = result.sum(axis=1).iloc[0]
         assert total == pytest.approx(100.0, abs=2.0)
 
     def test_minerals_non_negative(self, granite_bulk: pd.DataFrame) -> None:
-        result = granite_bulk.bulk.cipw()
+        result = granite_bulk.bulk.cipw_simple()
         assert (result >= 0).all().all()
 
     def test_has_iron_oxides(self, granite_bulk: pd.DataFrame) -> None:
-        result = granite_bulk.bulk.cipw()
+        result = granite_bulk.bulk.cipw_simple()
         assert "Il" in result.columns or "Mt" in result.columns
 
     def test_diorite_norm(self, diorite_bulk: pd.DataFrame) -> None:
-        result = diorite_bulk.bulk.cipw()
+        result = diorite_bulk.bulk.cipw_simple()
         total = result.sum(axis=1).iloc[0]
         assert total == pytest.approx(100.0, abs=2.0)
 
     def test_all_output_columns_non_empty(self, granite_bulk: pd.DataFrame) -> None:
-        result = granite_bulk.bulk.cipw()
+        result = granite_bulk.bulk.cipw_simple()
         for col in result.columns:
             assert result[col].notna().all(), f"NaN in column {col}"
 
@@ -194,10 +280,155 @@ class TestCalcOxideRatios:
         pd.testing.assert_frame_equal(from_accessor, from_func)
 
 
-class TestCalcCipwNorm:
+class TestCalcCipwSimpleNorm:
     def test_matches_accessor(self, granite_bulk: pd.DataFrame) -> None:
+        from_accessor = granite_bulk.bulk.cipw_simple()
+        from_func = cipw_norm_simple(granite_bulk)
+        pd.testing.assert_frame_equal(from_accessor, from_func)
+
+
+# ---------------------------------------------------------------------------
+# CIPW norm (GCDkit-faithful)
+# ---------------------------------------------------------------------------
+
+
+class TestCipwGcdkit:
+    def test_granite_has_quartz(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw()
+        assert "Q" in result.columns
+        assert result["Q"].iloc[0] > 0
+
+    def test_granite_has_feldspars(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw()
+        assert "Or" in result.columns
+        assert "Ab" in result.columns
+        assert "An" in result.columns
+
+    def test_basalt_has_diopside(self, basalt_bulk: pd.DataFrame) -> None:
+        result = basalt_bulk.bulk.cipw()
+        assert "Di" in result.columns
+        assert result["Di"].iloc[0] > 0
+
+    def test_basalt_has_olivine_or_hypersthene(self, basalt_bulk: pd.DataFrame) -> None:
+        result = basalt_bulk.bulk.cipw()
+        has_hy = "Hy" in result.columns and result["Hy"].iloc[0] > 0
+        has_ol = "Ol" in result.columns and result["Ol"].iloc[0] > 0
+        assert has_hy or has_ol
+
+    def test_sums_approximately_100(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw(normsum=True)
+        total = result["Total"].iloc[0]
+        assert total == pytest.approx(100.0, abs=2.0)
+
+    def test_basalt_sums_approximately_100(self, basalt_bulk: pd.DataFrame) -> None:
+        result = basalt_bulk.bulk.cipw(normsum=True)
+        total = result["Total"].iloc[0]
+        assert total == pytest.approx(100.0, abs=2.0)
+
+    def test_minerals_non_negative(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw()
+        assert (result >= 0).all().all()
+
+    def test_has_iron_oxides(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw()
+        assert "Il" in result.columns or "Mt" in result.columns
+
+    def test_diorite_norm(self, diorite_bulk: pd.DataFrame) -> None:
+        result = diorite_bulk.bulk.cipw(normsum=True)
+        total = result["Total"].iloc[0]
+        assert total == pytest.approx(100.0, abs=2.0)
+
+    def test_complete_results_has_subcolumns(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw(complete_results=True)
+        # Sub-mineral splits should be present
+        assert any(c in result.columns for c in ("En", "Fs", "Fo", "Fa"))
+
+    def test_drop_columns_by_default(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw()
+        # Sub-mineral splits dropped by default
+        for col in ("En", "Fs", "Fo", "Fa", "MgDi", "FeDi"):
+            assert col not in result.columns
+
+    def test_normsum_normalizes(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw(normsum=True)
+        total = result["Total"].iloc[0]
+        assert total == pytest.approx(100.0, abs=0.1)
+
+    def test_all_output_columns_non_empty(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipw()
+        for col in result.columns:
+            assert result[col].notna().all(), f"NaN in column {col}"
+
+    def test_matches_calc_function(self, granite_bulk: pd.DataFrame) -> None:
         from_accessor = granite_bulk.bulk.cipw()
         from_func = cipw_norm(granite_bulk)
+        pd.testing.assert_frame_equal(from_accessor, from_func)
+
+
+# ---------------------------------------------------------------------------
+# CIPWhb norm (GCDkit hornblende/biotite recasting)
+# ---------------------------------------------------------------------------
+
+
+class TestCipwhbGcdkit:
+    def test_granite_has_quartz(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb()
+        assert "Q" in result.columns
+        assert result["Q"].iloc[0] > 0
+
+    def test_granite_has_feldspars(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb()
+        assert "Or" in result.columns
+        assert "Ab" in result.columns
+        assert "An" in result.columns
+
+    def test_hb_has_biotite(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb()
+        assert "Bi" in result.columns
+
+    def test_hb_has_hornblende(self, basalt_bulk: pd.DataFrame) -> None:
+        result = basalt_bulk.bulk.cipwhb()
+        # Basalt should have hornblende
+        assert "Hbl" in result.columns
+
+    def test_sums_approximately_100(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb()
+        total = result["Total"].iloc[0]
+        assert total == pytest.approx(100.0, abs=2.0)
+
+    def test_basalt_sums_approximately_100(self, basalt_bulk: pd.DataFrame) -> None:
+        result = basalt_bulk.bulk.cipwhb()
+        total = result["Total"].iloc[0]
+        # CIPWhb does not normalise by default; basalt with high Hbl sums ~96.3
+        assert total == pytest.approx(100.0, abs=4.0)
+
+    def test_minerals_non_negative(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb()
+        assert (result >= 0).all().all()
+
+    def test_normsum_normalizes(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb(normsum=True)
+        total = result["Total"].iloc[0]
+        assert total == pytest.approx(100.0, abs=0.1)
+
+    def test_complete_results_has_subcolumns(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb(complete_results=True)
+        # CIPWhb-specific sub-mineral splits
+        assert any(c in result.columns for c in ("MgBi", "FeBi", "MgAct", "FeAct"))
+
+    def test_drop_columns_by_default(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb()
+        for col in ("MgBi", "FeBi", "MgAct", "FeAct", "MgEd", "FeEd"):
+            assert col not in result.columns
+
+    def test_all_output_columns_non_empty(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.cipwhb()
+        for col in result.columns:
+            assert result[col].notna().all(), f"NaN in column {col}"
+
+    def test_matches_calc_function(self, granite_bulk: pd.DataFrame) -> None:
+        from_accessor = granite_bulk.bulk.cipwhb()
+        from_func = cipw_norm_hb(granite_bulk)
         pd.testing.assert_frame_equal(from_accessor, from_func)
 
 

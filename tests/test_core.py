@@ -11,7 +11,9 @@ from petropandas._core import (
     _detect_col,
     _detect_cols,
     _element_of,
+    _formula_cols,
     _ion_name,
+    _is_formula,
     _is_oxide,
     _oxide_cols,
     _oxygens_per,
@@ -156,3 +158,45 @@ class TestAliases:
 
     def test_feot(self) -> None:
         assert ALIASES["FeOT"] == "FeO"
+
+
+class TestIsFormula:
+    def test_oxide(self) -> None:
+        assert _is_formula("SiO2")
+
+    def test_element_f(self) -> None:
+        assert _is_formula("F")
+
+    def test_element_s(self) -> None:
+        assert _is_formula("S")
+
+    def test_element_cl(self) -> None:
+        assert _is_formula("Cl")
+
+    def test_element_ba(self) -> None:
+        assert _is_formula("Ba")
+
+    def test_label(self) -> None:
+        assert not _is_formula("label")
+
+    def test_total(self) -> None:
+        assert not _is_formula("Total")
+
+    def test_feo_star(self) -> None:
+        assert not _is_formula("FeO*")
+
+
+class TestFormulaCols:
+    def test_mixed(self) -> None:
+        df = pd.DataFrame(
+            {"SiO2": [1], "label": ["a"], "FeO": [2], "F": [0.5], "Cl": [0.1]}
+        )
+        assert _formula_cols(df) == ["SiO2", "FeO", "F", "Cl"]
+
+    def test_oxides_only(self) -> None:
+        df = pd.DataFrame({"SiO2": [1], "FeO": [2]})
+        assert _formula_cols(df) == ["SiO2", "FeO"]
+
+    def test_no_formulas(self) -> None:
+        df = pd.DataFrame({"Sample": ["a"], "Locality": ["b"]})
+        assert _formula_cols(df) == []

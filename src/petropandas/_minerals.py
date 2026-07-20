@@ -18,34 +18,7 @@ import numpy as np
 import pandas as pd
 
 import petropandas._calc as _calc
-
-
-# ---------------------------------------------------------------------------
-# Scoring helper
-# ---------------------------------------------------------------------------
-
-
-def _score_trapezoidal(value, ideal_low, ideal_high, margin=1.5):
-    """Score *value* on a 0-1 trapezoidal scale.
-
-    Returns 1.0 when *value* is inside ``[ideal_low, ideal_high]``,
-    linearly decays to 0.0 at ``ideal_low - margin`` or
-    ``ideal_high + margin``, and 0.0 outside the acceptable range.
-
-    Args:
-        value: Measured value to score.
-        ideal_low: Lower bound of the perfect range.
-        ideal_high: Upper bound of the perfect range.
-        margin: Width of the linear decay zone on each side.
-
-    Returns:
-        Score between 0.0 and 1.0.
-    """
-    if ideal_low <= value <= ideal_high:
-        return 1.0
-    if value < ideal_low:
-        return max(0.0, (value - (ideal_low - margin)) / margin)
-    return max(0.0, ((ideal_high + margin) - value) / margin)
+from petropandas._calc import _score_trapezoidal  # noqa: F401  (re-exported)
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +111,7 @@ class Mineral:
         included.  Cations not in any site's priority list or in excess
         of site capacity are excluded.
 
-        Use ``df.apfu(n_oxygens=...)`` for raw APFU before site filtering.
+        Use ``df.cations(n_oxygens=...)`` for raw APFU before site filtering.
 
         Args:
             df: DataFrame with oxide columns.
@@ -317,12 +290,12 @@ class Garnet(Mineral):
         total_safe = total.replace(0, 1)
 
         result = pd.DataFrame(index=idx)
-        result["Prp"] = (prp / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Alm"] = (alm / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Sps"] = (sps / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Grs"] = (grs / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Adr"] = (adr / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Uvr"] = (uvr / total_safe * 100).where(total > 0, 0.0).round(3)
+        result["Prp"] = (prp / total_safe * 100).where(total > 0, 0.0)
+        result["Alm"] = (alm / total_safe * 100).where(total > 0, 0.0)
+        result["Sps"] = (sps / total_safe * 100).where(total > 0, 0.0)
+        result["Grs"] = (grs / total_safe * 100).where(total > 0, 0.0)
+        result["Adr"] = (adr / total_safe * 100).where(total > 0, 0.0)
+        result["Uvr"] = (uvr / total_safe * 100).where(total > 0, 0.0)
         return result
 
 
@@ -398,7 +371,7 @@ class GarnetFe3(Garnet):
         x = x / col_sums * 100.0
 
         result = pd.DataFrame(
-            {name: np.round(x[i], 3) for i, name in enumerate(self._ENDMEMBER_NAMES)},
+            {name: x[i] for i, name in enumerate(self._ENDMEMBER_NAMES)},
             index=apfu.index,
         )
         return result
@@ -439,7 +412,7 @@ class Feldspar(Mineral):
         for col in m_cols:
             ion = col[1]
             name = mapping.get(ion, ion)
-            result[name] = (sf[col] / m_total * 100).round(3)
+            result[name] = sf[col] / m_total * 100
         return result
 
 
@@ -534,15 +507,15 @@ class Clinopyroxene(Mineral):
 
         result = pd.DataFrame(index=idx)
 
-        result["Jd"] = (jd / raw_safe * 100).where(raw > 0, 0.0).round(3)
-        result["Ae"] = (ae / raw_safe * 100).where(raw > 0, 0.0).round(3)
-        result["Di"] = (di / raw_safe * 100).where(raw > 0, 0.0).round(3)
-        result["Hd"] = (hd / raw_safe * 100).where(raw > 0, 0.0).round(3)
-        result["Kosmochlor"] = (krs / raw_safe * 100).where(raw > 0, 0.0).round(3)
-        result["CaTs"] = (cats / raw_safe * 100).where(raw > 0, 0.0).round(3)
-        result["Wo"] = (wo / raw_safe * 100).where(raw > 0, 0.0).round(3)
-        result["En"] = (en / raw_safe * 100).where(raw > 0, 0.0).round(3)
-        result["Fs"] = (fs / raw_safe * 100).where(raw > 0, 0.0).round(3)
+        result["Jd"] = (jd / raw_safe * 100).where(raw > 0, 0.0)
+        result["Ae"] = (ae / raw_safe * 100).where(raw > 0, 0.0)
+        result["Di"] = (di / raw_safe * 100).where(raw > 0, 0.0)
+        result["Hd"] = (hd / raw_safe * 100).where(raw > 0, 0.0)
+        result["Kosmochlor"] = (krs / raw_safe * 100).where(raw > 0, 0.0)
+        result["CaTs"] = (cats / raw_safe * 100).where(raw > 0, 0.0)
+        result["Wo"] = (wo / raw_safe * 100).where(raw > 0, 0.0)
+        result["En"] = (en / raw_safe * 100).where(raw > 0, 0.0)
+        result["Fs"] = (fs / raw_safe * 100).where(raw > 0, 0.0)
         return result
 
 
@@ -628,10 +601,10 @@ class Orthopyroxene(Mineral):
         en = en_fs_cap * (mg / mg_fe_total)
         fs = en_fs_cap * (fe2 / mg_fe_total)
 
-        result["MgTs"] = (mgtsermaki * 100).round(3)
-        result["Wo"] = (wo * 100).round(3)
-        result["En"] = (en * 100).round(3)
-        result["Fs"] = (fs * 100).round(3)
+        result["MgTs"] = mgtsermaki * 100
+        result["Wo"] = wo * 100
+        result["En"] = en * 100
+        result["Fs"] = fs * 100
         return result
 
 
@@ -725,13 +698,13 @@ class Muscovite(Mineral):
 
         # Scale dioctahedral component
         result = pd.DataFrame(index=idx)
-        result["Al-Celadonite"] = (x_mgcel * x_dioct * 100).round(3)
-        result["Fe-Al-Celadonite"] = (x_fecel * x_dioct * 100).round(3)
-        result["Pyrophyllite"] = (x_prl * x_dioct * 100).round(3)
-        result["Margarite"] = (x_mrg * x_dioct * 100).round(3)
-        result["Paragonite"] = (x_pg * x_dioct * 100).round(3)
-        result["Muscovite"] = (x_ms * x_dioct * 100).round(3)
-        result["Trioctahedral"] = (x_trioct * 100).round(3)
+        result["Al-Celadonite"] = x_mgcel * x_dioct * 100
+        result["Fe-Al-Celadonite"] = x_fecel * x_dioct * 100
+        result["Pyrophyllite"] = x_prl * x_dioct * 100
+        result["Margarite"] = x_mrg * x_dioct * 100
+        result["Paragonite"] = x_pg * x_dioct * 100
+        result["Muscovite"] = x_ms * x_dioct * 100
+        result["Trioctahedral"] = x_trioct * 100
         return result
 
 
@@ -811,11 +784,11 @@ class Biotite(Mineral):
         x_sid = (x_sideast - x_sideast * x_mg) * x_trioct
 
         result = pd.DataFrame(index=idx)
-        result["Phlogopite"] = (x_phl * 100).round(3)
-        result["Annite"] = (x_ann * 100).round(3)
-        result["Eastonite"] = (x_eas * 100).round(3)
-        result["Siderophyllite"] = (x_sid * 100).round(3)
-        result["Dioctahedral"] = (x_dioct * 100).round(3)
+        result["Phlogopite"] = x_phl * 100
+        result["Annite"] = x_ann * 100
+        result["Eastonite"] = x_eas * 100
+        result["Siderophyllite"] = x_sid * 100
+        result["Dioctahedral"] = x_dioct * 100
         return result
 
 
@@ -871,10 +844,10 @@ class Staurolite(Mineral):
 
         result = pd.DataFrame(index=idx)
         r2_safe = r2_total.replace(0, 1)
-        result["Fe-Staurolite"] = (fe / r2_safe * 100).where(r2_total > 0, 0.0).round(3)
-        result["Mg-Staurolite"] = (mg / r2_safe * 100).where(r2_total > 0, 0.0).round(3)
-        result["Zn-Staurolite"] = (zn / r2_safe * 100).where(r2_total > 0, 0.0).round(3)
-        result["Mn-Staurolite"] = (mn / r2_safe * 100).where(r2_total > 0, 0.0).round(3)
+        result["Fe-Staurolite"] = (fe / r2_safe * 100).where(r2_total > 0, 0.0)
+        result["Mg-Staurolite"] = (mg / r2_safe * 100).where(r2_total > 0, 0.0)
+        result["Zn-Staurolite"] = (zn / r2_safe * 100).where(r2_total > 0, 0.0)
+        result["Mn-Staurolite"] = (mn / r2_safe * 100).where(r2_total > 0, 0.0)
         return result
 
 
@@ -942,10 +915,10 @@ class Chlorite(Mineral):
         x_tsch = 1.0 - x_normal
 
         result = pd.DataFrame(index=idx)
-        result["Clinochlore"] = (x_normal * x_mg * 100).round(3)
-        result["Chamosite"] = (x_normal * (1.0 - x_mg) * 100).round(3)
-        result["Mg-Sudoite"] = (x_tsch * x_mg * 100).round(3)
-        result["Fe-Sudoite"] = (x_tsch * (1.0 - x_mg) * 100).round(3)
+        result["Clinochlore"] = x_normal * x_mg * 100
+        result["Chamosite"] = x_normal * (1.0 - x_mg) * 100
+        result["Mg-Sudoite"] = x_tsch * x_mg * 100
+        result["Fe-Sudoite"] = x_tsch * (1.0 - x_mg) * 100
         return result
 
 
@@ -1021,11 +994,11 @@ class Epidote(Mineral):
         m_safe = m_total.replace(0, 1)
 
         result = pd.DataFrame(index=idx)
-        result["Clinozoisite"] = (al / m_safe * 100).where(m_total > 0, 0.0).round(3)
-        result["Epidote"] = (fe3 / m_safe * 100).where(m_total > 0, 0.0).round(3)
-        result["Piemontite"] = (mn3 / m_safe * 100).where(m_total > 0, 0.0).round(3)
-        result["Mukhinite"] = (v3 / m_safe * 100).where(m_total > 0, 0.0).round(3)
-        result["Tawmawite"] = (cr3 / m_safe * 100).where(m_total > 0, 0.0).round(3)
+        result["Clinozoisite"] = (al / m_safe * 100).where(m_total > 0, 0.0)
+        result["Epidote"] = (fe3 / m_safe * 100).where(m_total > 0, 0.0)
+        result["Piemontite"] = (mn3 / m_safe * 100).where(m_total > 0, 0.0)
+        result["Mukhinite"] = (v3 / m_safe * 100).where(m_total > 0, 0.0)
+        result["Tawmawite"] = (cr3 / m_safe * 100).where(m_total > 0, 0.0)
         return result
 
 
@@ -1146,19 +1119,19 @@ class Amphibole(Mineral):
         x_mg_rieb = is_sodic * x_mg * (1.0 - x_tschermak)
 
         result = pd.DataFrame(index=idx)
-        result["Tremolite"] = (x_trem * 100).round(3)
-        result["Actinolite"] = (x_act * 100).round(3)
-        result["Edenite"] = (x_eas * 100).round(3)
-        result["Ferro-Edenite"] = (x_ferro_eas * 100).round(3)
-        result["Pargasite"] = (x_prg * 100).round(3)
-        result["Ferro-Pargasite"] = (x_ferro_prg * 100).round(3)
-        result["Tschermakite"] = (x_tsch * 100).round(3)
-        result["Richterite"] = (x_richt * 100).round(3)
-        result["Winchite"] = (x_winch * 100).round(3)
-        result["Glaucophane"] = (x_glau * 100).round(3)
-        result["Ferro-Glaucophane"] = (x_ferro_glau * 100).round(3)
-        result["Riebeckite"] = (x_rieb * 100).round(3)
-        result["Magnesio-Riebeckite"] = (x_mg_rieb * 100).round(3)
+        result["Tremolite"] = x_trem * 100
+        result["Actinolite"] = x_act * 100
+        result["Edenite"] = x_eas * 100
+        result["Ferro-Edenite"] = x_ferro_eas * 100
+        result["Pargasite"] = x_prg * 100
+        result["Ferro-Pargasite"] = x_ferro_prg * 100
+        result["Tschermakite"] = x_tsch * 100
+        result["Richterite"] = x_richt * 100
+        result["Winchite"] = x_winch * 100
+        result["Glaucophane"] = x_glau * 100
+        result["Ferro-Glaucophane"] = x_ferro_glau * 100
+        result["Riebeckite"] = x_rieb * 100
+        result["Magnesio-Riebeckite"] = x_mg_rieb * 100
         return result
 
 
@@ -1246,12 +1219,12 @@ class Titanite(Mineral):
         b_safe = b_total.replace(0, 1)
 
         result = pd.DataFrame(index=idx)
-        result["Ttn"] = (ti / b_safe * 100).where(b_total > 0, 0.0).round(3)
-        result["Al-Ttn"] = (al / b_safe * 100).where(b_total > 0, 0.0).round(3)
-        result["Fe-Ttn"] = (fe3 / b_safe * 100).where(b_total > 0, 0.0).round(3)
-        result["Mal"] = (sn / b_safe * 100).where(b_total > 0, 0.0).round(3)
+        result["Ttn"] = (ti / b_safe * 100).where(b_total > 0, 0.0)
+        result["Al-Ttn"] = (al / b_safe * 100).where(b_total > 0, 0.0)
+        result["Fe-Ttn"] = (fe3 / b_safe * 100).where(b_total > 0, 0.0)
+        result["Mal"] = (sn / b_safe * 100).where(b_total > 0, 0.0)
         other = nb + zr + cr + v + mg
-        result["Other"] = (other / b_safe * 100).where(b_total > 0, 0.0).round(3)
+        result["Other"] = (other / b_safe * 100).where(b_total > 0, 0.0)
         return result
 
 
@@ -1311,9 +1284,9 @@ class Chloritoid(Mineral):
         r2_safe = r2_total.replace(0, 1)
 
         result = pd.DataFrame(index=idx)
-        result["Cld"] = (fe2 / r2_safe * 100).where(r2_total > 0, 0.0).round(3)
-        result["Mgcld"] = (mg / r2_safe * 100).where(r2_total > 0, 0.0).round(3)
-        result["Mncld"] = (mn / r2_safe * 100).where(r2_total > 0, 0.0).round(3)
+        result["Cld"] = (fe2 / r2_safe * 100).where(r2_total > 0, 0.0)
+        result["Mgcld"] = (mg / r2_safe * 100).where(r2_total > 0, 0.0)
+        result["Mncld"] = (mn / r2_safe * 100).where(r2_total > 0, 0.0)
         return result
 
 
@@ -1380,10 +1353,10 @@ class Cordierite(Mineral):
         b_frac = 1.0 - a_total
 
         result = pd.DataFrame(index=idx)
-        result["H₂O-Crd"] = (a_total * 100).round(3)
-        result["Mg-Crd"] = (x_mg * b_frac * 100).round(3)
-        result["Fe-Crd"] = (x_fe * b_frac * 100).round(3)
-        result["Mn-Crd"] = (x_mn * b_frac * 100).round(3)
+        result["H₂O-Crd"] = a_total * 100
+        result["Mg-Crd"] = x_mg * b_frac * 100
+        result["Fe-Crd"] = x_fe * b_frac * 100
+        result["Mn-Crd"] = x_mn * b_frac * 100
         return result
 
 
@@ -1473,11 +1446,11 @@ class Ilmenite(Mineral):
         total_safe = total.replace(0, 1)
 
         result = pd.DataFrame(index=idx)
-        result["Ilm"] = (ilm / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Gk"] = (gk / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Pph"] = (pph / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Hem"] = (hem / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Chr"] = (chr_ / total_safe * 100).where(total > 0, 0.0).round(3)
+        result["Ilm"] = (ilm / total_safe * 100).where(total > 0, 0.0)
+        result["Gk"] = (gk / total_safe * 100).where(total > 0, 0.0)
+        result["Pph"] = (pph / total_safe * 100).where(total > 0, 0.0)
+        result["Hem"] = (hem / total_safe * 100).where(total > 0, 0.0)
+        result["Chr"] = (chr_ / total_safe * 100).where(total > 0, 0.0)
         return result
 
 
@@ -1600,15 +1573,15 @@ class Spinel(Mineral):
         # Normalized percentages (may not sum to 100 due to minor components)
         # Report as fractions of the computed total
         result = pd.DataFrame(index=idx)
-        result["Spl"] = (spl / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Herc"] = (herc / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Chrm"] = (chrm / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Mtc"] = (mtc / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Gahn"] = (gahn / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Frank"] = (frank / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Jac"] = (jac / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Ulv"] = (ulv / total_safe * 100).where(total > 0, 0.0).round(3)
-        result["Spss"] = (spss / total_safe * 100).where(total > 0, 0.0).round(3)
+        result["Spl"] = (spl / total_safe * 100).where(total > 0, 0.0)
+        result["Herc"] = (herc / total_safe * 100).where(total > 0, 0.0)
+        result["Chrm"] = (chrm / total_safe * 100).where(total > 0, 0.0)
+        result["Mtc"] = (mtc / total_safe * 100).where(total > 0, 0.0)
+        result["Gahn"] = (gahn / total_safe * 100).where(total > 0, 0.0)
+        result["Frank"] = (frank / total_safe * 100).where(total > 0, 0.0)
+        result["Jac"] = (jac / total_safe * 100).where(total > 0, 0.0)
+        result["Ulv"] = (ulv / total_safe * 100).where(total > 0, 0.0)
+        result["Spss"] = (spss / total_safe * 100).where(total > 0, 0.0)
         return result
 
 

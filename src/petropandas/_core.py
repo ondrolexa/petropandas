@@ -25,6 +25,10 @@ ALIASES: dict[str, str] = {
     "Fe2O3t": "Fe2O3",
     "Fe2O3 Total": "Fe2O3",
     "Fe2O3(T)": "Fe2O3",
+    "H2O_PLUS": "H2O",
+    "H2O+": "H2O",
+    "H2OPLUS": "H2O",
+    "H2OP": "H2O",
 }
 
 
@@ -34,17 +38,35 @@ ALIASES: dict[str, str] = {
 
 
 @lru_cache(maxsize=None)
+def _safe_formula(col: str):
+    """Parse *col* as a periodictable formula, or return None if invalid."""
+    try:
+        return formula(col)
+    except Exception:
+        return None
+
+
+@lru_cache(maxsize=None)
 def _is_oxide(col: str) -> bool:
     """Return True if *col* parses as a formula containing oxygen."""
-    try:
-        return _O in formula(col).atoms
-    except Exception:
-        return False
+    f = _safe_formula(col)
+    return f is not None and _O in f.atoms
 
 
 def _oxide_cols(df) -> list[str]:
     """Return columns of *df* that are parseable oxides, preserving order."""
     return [c for c in df.columns if _is_oxide(c)]
+
+
+@lru_cache(maxsize=None)
+def _is_formula(col: str) -> bool:
+    """Return True if *col* parses as any valid chemical formula."""
+    return _safe_formula(col) is not None
+
+
+def _formula_cols(df) -> list[str]:
+    """Return columns of *df* that are parseable chemical formulas."""
+    return [c for c in df.columns if _is_formula(c)]
 
 
 @lru_cache(maxsize=None)
@@ -135,15 +157,13 @@ def _parse_ion(col: str) -> tuple[str, int] | None:
     Returns:
         Tuple of (element symbol, charge), or None if not an ion.
     """
-    try:
-        f = formula(col)
-        if f.charge != 0:
-            for atom, count in f.atoms.items():
-                if hasattr(atom, "charge") and count == 1:
-                    return atom.symbol, atom.charge
+    f = _safe_formula(col)
+    if f is None or f.charge == 0:
         return None
-    except Exception:
-        return None
+    for atom, count in f.atoms.items():
+        if hasattr(atom, "charge") and count == 1:
+            return atom.symbol, atom.charge
+    return None
 
 
 def _ion_to_oxide(element_symbol: str, charge: int) -> str:
@@ -209,13 +229,35 @@ def _element_charge(element_symbol: str) -> int:
     Returns:
         Default charge (e.g. ``2`` for Fe as Fe²⁺ in FeO).
     """
+    # Elements not listed here (e.g. rare-earths) default to 2+ as the
+    # most common EMPA reporting convention, not because 2 is otherwise
+    # a safe guess — add them to _ELEMENT_CHARGE if that's wrong for a
+    # mineral you're adding.
     return _ELEMENT_CHARGE.get(element_symbol, 2)
+
+
+def _detect_cols(df, element: str) -> list[str]:
+    """Find all columns in *df* containing *element*.
+
+    Works for both oxide names (``'FeO'``) and ion names (``'Fe{2+}'``).
+
+    Args:
+        df: DataFrame to search.
+        element: Element symbol to find.
+
+    Returns:
+        List of matching column names.
+    """
+    result = []
+    for col in df.columns:
+        f = _safe_formula(col)
+        if f is not None and any(atom.symbol == element for atom in f.atoms):
+            result.append(col)
+    return result
 
 
 def _detect_col(df, element: str) -> str:
     """Find the first column in *df* containing *element*.
-
-    Works for both oxide names (``'FeO'``) and ion names (``'Fe{2+}'``).
 
     Args:
         df: DataFrame to search.
@@ -227,32 +269,7 @@ def _detect_col(df, element: str) -> str:
     Raises:
         KeyError: If no column contains the element.
     """
-    for col in df.columns:
-        try:
-            atoms = formula(col).atoms
-            if any(atom.symbol == element for atom in atoms):
-                return col
-        except Exception:
-            continue
-    raise KeyError(f"No column found for element {element!r}")
-
-
-def _detect_cols(df, element: str) -> list[str]:
-    """Find all columns in *df* containing *element*.
-
-    Args:
-        df: DataFrame to search.
-        element: Element symbol to find.
-
-    Returns:
-        List of matching column names.
-    """
-    result = []
-    for col in df.columns:
-        try:
-            atoms = formula(col).atoms
-            if any(atom.symbol == element for atom in atoms):
-                result.append(col)
-        except Exception:
-            continue
-    return result
+    matches = _detect_cols(df, element)
+    if not matches:
+        raise KeyError(f"No column found for element {element!r}")
+    return matches[0]

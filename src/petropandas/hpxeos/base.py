@@ -150,4 +150,4 @@ class Phase(Mineral, ABC):
             DataFrame of end-member percentages.
         """
         raw = self._raw_apfu(df, units)
-        return (self.proportions(raw, order_parameters) * 100).round(3)
+        return self.proportions(raw, order_parameters) * 100

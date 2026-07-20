@@ -73,6 +73,11 @@ def _strip_backticks(expr: str) -> str:
     return expr.replace("`", "")
 
 
+def _default_label(label: str | None, expr: str) -> str:
+    """Axis/label default: the given `label`, or `expr` with backticks stripped."""
+    return label if label is not None else _strip_backticks(expr)
+
+
 class BasePlot(ABC):
     """Shared foundation for matplotlib-based petrology plots.
 
@@ -289,8 +294,8 @@ class ScatterPlot(BasePlot):
         super().__init__(**kwargs)
         self.x = x
         self.y = y
-        self.xlabel = xlabel if xlabel is not None else _strip_backticks(x)
-        self.ylabel = ylabel if ylabel is not None else _strip_backticks(y)
+        self.xlabel = _default_label(xlabel, x)
+        self.ylabel = _default_label(ylabel, y)
         self.xlim = xlim
         self.ylim = ylim
 
@@ -443,6 +448,14 @@ def _unit(dx: float, dy: float) -> tuple[float, float]:
     return (dx / length, dy / length)
 
 
+def _safe_unit(
+    dx: float, dy: float, default: tuple[float, float] = (0.0, 1.0)
+) -> tuple[float, float]:
+    """Unit vector for (dx, dy), or `default` when its length is ~0."""
+    length = math.hypot(dx, dy)
+    return (dx / length, dy / length) if length > _EPS else default
+
+
 _TICK_DIRECTION = {
     0: _unit(_R[0] - _L[0], _R[1] - _L[1]),  # t-ticks parallel to L->R
     1: _unit(_R[0] - _T[0], _R[1] - _T[1]),  # l-ticks parallel to T->R
@@ -455,10 +468,9 @@ def _edge_outward_normal(
 ) -> tuple[float, float]:
     """Unit vector perpendicular to edge (x1,y1)-(x2,y2), pointing away from `centroid`."""
     edx, edy = x2 - x1, y2 - y1
-    length = math.hypot(edx, edy)
-    if length < _EPS:
+    if math.hypot(edx, edy) < _EPS:
         return 0.0, 0.0
-    nx, ny = -edy / length, edx / length
+    nx, ny = _unit(-edy, edx)
     mx, my = (x1 + x2) / 2, (y1 + y2) / 2
     if nx * (mx - centroid[0]) + ny * (my - centroid[1]) < 0:
         nx, ny = -nx, -ny
@@ -510,13 +522,9 @@ def _vertex_anchor(
             points[0][0], points[0][1], points[1][0], points[1][1], centroid
         )
         if math.hypot(normal[0], normal[1]) < _EPS:
-            vx, vy = cx - centroid[0], cy - centroid[1]
-            length = math.hypot(vx, vy)
-            normal = (vx / length, vy / length) if length > _EPS else (0.0, 1.0)
+            normal = _safe_unit(cx - centroid[0], cy - centroid[1])
         return (cx, cy), normal, True
-    vx, vy = points[0][0] - centroid[0], points[0][1] - centroid[1]
-    length = math.hypot(vx, vy)
-    normal = (vx / length, vy / length) if length > _EPS else (0.0, 1.0)
+    normal = _safe_unit(points[0][0] - centroid[0], points[0][1] - centroid[1])
     return (cx, cy), normal, False
 
 
@@ -632,6 +640,17 @@ class TernaryPlot(BasePlot):
     projection library).
     """
 
+    _TITLE_PAD = 44  # points between the axes and the title, clearing vertex labels
+    _TICK_LEN_FRAC = 0.01  # tick mark length, as a fraction of the triangle's span
+    _LABEL_GAP_FRAC = 0.035  # gap between a tick/vertex and its label, as a
+    # fraction of the triangle's span
+    _TICK_FONTSIZE = 9
+    _VERTEX_FONTSIZE = 11
+    _VERTEX_GAP_MULT = 2.5  # side-vertex label gap, in units of _LABEL_GAP_FRAC
+    _TOP_VERTEX_GAP_MULT = 3.3  # top vertex sits further out to clear the title
+    _CUT_VERTEX_GAP_EXTRA = 1.5  # extra gap (label-gap units) for a cut vertex
+    _TOP_CUT_VERTEX_GAP_EXTRA = 1.7  # additional extra gap for a cut top vertex
+
     def __init__(
         self,
         top: str,
@@ -670,13 +689,9 @@ class TernaryPlot(BasePlot):
         self.left = left
         self.right = right
         self.ternary_sum = ternary_sum
-        self.top_label = top_label if top_label is not None else _strip_backticks(top)
-        self.left_label = (
-            left_label if left_label is not None else _strip_backticks(left)
-        )
-        self.right_label = (
-            right_label if right_label is not None else _strip_backticks(right)
-        )
+        self.top_label = _default_label(top_label, top)
+        self.left_label = _default_label(left_label, left)
+        self.right_label = _default_label(right_label, right)
         self.tlim = tlim
         self.llim = llim
         self.rlim = rlim
@@ -695,9 +710,27 @@ class TernaryPlot(BasePlot):
         ax.set_aspect("equal")
         ax.axis("off")
         if self.title:
-            ax.set_title(self.title, pad=44)
+            ax.set_title(self.title, pad=self._TITLE_PAD)
 
         polygon = _polygon_vertices(self.tlim, self.llim, self.rlim, self.ternary_sum)
+        scale = self._draw_outline(ax, polygon)
+        tick_len = self._TICK_LEN_FRAC * scale
+        label_gap = self._LABEL_GAP_FRAC * scale
+
+        centroid = _polygon_centroid(polygon)
+        axis_rotation = self._draw_ticks_and_gridlines(ax, polygon, tick_len, label_gap)
+        self._draw_vertex_labels(
+            ax, polygon, centroid, axis_rotation, tick_len, label_gap
+        )
+
+    def _draw_outline(
+        self, ax: Axes, polygon: list[tuple[float, float, float]]
+    ) -> float:
+        """Draw the (possibly clipped) triangle outline and set axis limits.
+
+        Returns:
+            The triangle's span, used to scale tick/label offsets.
+        """
         xs, ys = zip(*(_project(v[0], v[1], v[2]) for v in polygon))
         xs = [float(x) for x in xs]
         ys = [float(y) for y in ys]
@@ -706,17 +739,24 @@ class TernaryPlot(BasePlot):
         )
         ax.set_xlim(min(xs), max(xs))
         ax.set_ylim(min(ys), max(ys))
+        return max(max(xs) - min(xs), max(ys) - min(ys))
 
-        scale = max(max(xs) - min(xs), max(ys) - min(ys))
-        tick_len = 0.01 * scale
-        label_gap = 0.025 * scale
+    def _draw_ticks_and_gridlines(
+        self,
+        ax: Axes,
+        polygon: list[tuple[float, float, float]],
+        tick_len: float,
+        label_gap: float,
+    ) -> dict[int, float]:
+        """Draw tick marks/labels and (optional) gridlines for all 3 axes.
 
+        Returns:
+            Each axis key's label rotation (degrees), reused for its vertex label.
+        """
         tick_mark_xs: list[float] = []
         tick_mark_ys: list[float] = []
         gridline_xs: list[float] = []
         gridline_ys: list[float] = []
-
-        centroid = _polygon_centroid(polygon)
         axis_rotation: dict[int, float] = {}
 
         for key in (0, 1, 2):
@@ -735,7 +775,7 @@ class TernaryPlot(BasePlot):
                     va="center",
                     rotation=axis_rotation[key],
                     rotation_mode="anchor",
-                    fontsize=9,
+                    fontsize=self._TICK_FONTSIZE,
                     annotation_clip=False,
                     clip_on=False,
                 )
@@ -759,13 +799,23 @@ class TernaryPlot(BasePlot):
                 zorder=3,
                 clip_on=False,
             )
+        return axis_rotation
 
-        vertex_gap = label_gap * 2.5
-        top_vertex_gap = label_gap * 3.3
-        cut_vertex_gap = tick_len + label_gap * 1.5
-        top_cut_vertex_gap = cut_vertex_gap + label_gap * 1.7
-        vertex_tangent = {0: 0.0, 1: 0, 2: 0.0}
-        vertex_tangent_gap = label_gap * 1.1
+    def _draw_vertex_labels(
+        self,
+        ax: Axes,
+        polygon: list[tuple[float, float, float]],
+        centroid: tuple[float, float],
+        axis_rotation: dict[int, float],
+        tick_len: float,
+        label_gap: float,
+    ) -> None:
+        """Draw the top/left/right axis-name labels, anchored outward from
+        each (possibly cut) polygon vertex."""
+        vertex_gap = label_gap * self._VERTEX_GAP_MULT
+        top_vertex_gap = label_gap * self._TOP_VERTEX_GAP_MULT
+        cut_vertex_gap = tick_len + label_gap * self._CUT_VERTEX_GAP_EXTRA
+        top_cut_vertex_gap = cut_vertex_gap + label_gap * self._TOP_CUT_VERTEX_GAP_EXTRA
         for key, text in (
             (0, self.top_label),
             (1, self.left_label),
@@ -777,30 +827,17 @@ class TernaryPlot(BasePlot):
             else:
                 gap = cut_vertex_gap if is_cut else vertex_gap
             rotation = axis_rotation.get(key, 0.0)
-            tx = (
-                math.cos(math.radians(rotation))
-                * vertex_tangent[key]
-                * vertex_tangent_gap
-            )
-            ty = (
-                math.sin(math.radians(rotation))
-                * vertex_tangent[key]
-                * vertex_tangent_gap
-            )
             ax.annotate(
                 text,
-                xy=(cx + nx * gap + tx, cy + ny * gap + ty),
+                xy=(cx + nx * gap, cy + ny * gap),
                 ha="center",
                 va="center",
                 rotation=rotation,
                 rotation_mode="anchor",
-                fontsize=11,
+                fontsize=self._VERTEX_FONTSIZE,
                 annotation_clip=False,
                 clip_on=False,
             )
-
-    def _subplot_kwargs(self) -> dict[str, Any]:
-        return {}
 
 
 def _variance(values: list[float]) -> float:
@@ -1063,12 +1100,7 @@ class ProfilePlot(BasePlot):
             return None, self._resolve_secondary_columns()
         selected = set(self.columns)
         if self.secondary_columns is None:
-            if self.split == "auto":
-                secondary = self._auto_split(self.columns)
-                return selected, secondary
-            if self.split != "off":
-                raise ValueError(f"split must be 'auto' or 'off', got {self.split!r}")
-            return selected, set()
+            return selected, self._split_secondary_columns(self.columns)
         secondary = set(self.secondary_columns)
         return selected | secondary, secondary
 
@@ -1080,10 +1112,26 @@ class ProfilePlot(BasePlot):
         """
         if self.secondary_columns is not None:
             return set(self.secondary_columns)
+        return self._split_secondary_columns(None)
+
+    def _split_secondary_columns(self, candidates: list[str] | None) -> set[str]:
+        """Resolve `self.split` into a secondary-axis column set.
+
+        Only called once `self.secondary_columns is None` has already been
+        established by the caller - when `secondary_columns` is given
+        explicitly, `split` is ignored entirely and this is never reached.
+
+        Args:
+            candidates: Columns to restrict an `"auto"` split to, or `None`
+                for every accumulated column (see `_auto_split`).
+
+        Raises:
+            ValueError: If `split` is neither `"auto"` nor `"off"`.
+        """
         if self.split == "off":
             return set()
         if self.split == "auto":
-            return self._auto_split()
+            return self._auto_split(candidates)
         raise ValueError(f"split must be 'auto' or 'off', got {self.split!r}")
 
     def _all_columns(self) -> list[str]:
@@ -1097,6 +1145,14 @@ class ProfilePlot(BasePlot):
     def _auto_split(self, candidates: list[str] | None = None) -> set[str]:
         """Split candidate columns into two axes by minimizing within-group
         variance of each column's mean value.
+
+        The optimal 2-way partition of a set of scalar means, in the sense of
+        minimizing the summed within-group variance, is always a contiguous
+        split of the values in sorted order (an exchange argument shows any
+        non-contiguous assignment can only be improved by moving toward
+        contiguity - the same property behind 1-D k-means/Jenks natural
+        breaks) - so only the `n - 1` contiguous splits of the sorted means
+        need checking, not every subset.
 
         Args:
             candidates: Columns to consider for the split. Defaults to
@@ -1120,17 +1176,17 @@ class ProfilePlot(BasePlot):
         if len(columns) < 2:
             return set()
 
+        sorted_cols = sorted(columns, key=lambda c: means[c])
         best_variance: float | None = None
         best_group_b: set[str] = set()
-        for size in range(1, len(columns)):
-            for combo in itertools.combinations(columns, size):
-                group_a = set(combo)
-                group_b = set(columns) - group_a
-                variance = _variance([means[c] for c in group_a]) + _variance(
-                    [means[c] for c in group_b]
-                )
-                if best_variance is None or variance < best_variance:
-                    best_variance = variance
-                    # Keep the side containing the first-seen column primary.
-                    best_group_b = group_b if columns[0] in group_a else group_a
+        for k in range(1, len(sorted_cols)):
+            group_a = set(sorted_cols[:k])
+            group_b = set(sorted_cols[k:])
+            variance = _variance([means[c] for c in group_a]) + _variance(
+                [means[c] for c in group_b]
+            )
+            if best_variance is None or variance < best_variance:
+                best_variance = variance
+                # Keep the side containing the first-seen column primary.
+                best_group_b = group_b if columns[0] in group_a else group_a
         return best_group_b
