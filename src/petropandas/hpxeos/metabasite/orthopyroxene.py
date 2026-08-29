@@ -25,6 +25,8 @@ from site allocation.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -88,21 +90,21 @@ xSiT       1 1    1  2  -1/2  f  -1/2  y
 
 class Orthopyroxene(Phase):
     abbreviation = "opx"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Fe{2+}", "Fe{3+}", "Al{3+}"],
         "M2": ["Mg{2+}", "Fe{2+}", "Ca{2+}"],
         "T": ["Si{4+}", "Al{3+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["en", "fs", "fm", "mgts", "fopx", "odi"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["en", "fs", "fm", "mgts", "fopx", "odi"]
     order_parameter_names = ("Q",)
 
     # -- petropandas Mineral metadata (from old TC_opx) --
     n_oxygens = 6
     ideal_cations = 4
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {
             "name": "M1",
             "capacity": 1.0,

@@ -34,6 +34,8 @@ are optional caller-supplied inputs defaulting to 0.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -119,20 +121,20 @@ xCaM2n     1 1    1  2  -1  j  -1  Q
 
 class Omphacite(Phase):
     abbreviation = "dio"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Fe{2+}", "Al{3+}", "Fe{3+}"],
         "M2": ["Na{+}", "Ca{2+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["jd", "di", "hed", "acmm", "om", "cfm", "jac"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["jd", "di", "hed", "acmm", "om", "cfm", "jac"]
     order_parameter_names = ("Q", "Qaf", "Qfm")
 
     # -- petropandas Mineral metadata (from old TC_dio) --
     n_oxygens = 6
     ideal_cations = 4
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 2.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M1",

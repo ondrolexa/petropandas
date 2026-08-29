@@ -9,6 +9,8 @@ ca, k are exactly recoverable from bulk composition (A site only ever holds Na, 
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -33,18 +35,18 @@ xSiTB      1 1    3/4  1  -1/4  ca
 
 class Plagioclase(Phase):
     abbreviation = "pl4tr"
-    sites = {
+    sites: ClassVar = {
         "A": ["Na{+}", "Ca{2+}", "K{+}"],
         "TB": ["Al{3+}", "Si{4+}"],
     }
-    end_member_names = ["ab", "an", "san"]
+    end_member_names: ClassVar = ["ab", "an", "san"]
 
     # -- petropandas Mineral metadata (from old TC_pl4tr) --
     n_oxygens = 8
     ideal_cations = None
     analytical_total_range = (98.5, 101.5)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "A", "capacity": 1.0, "priority": ["Na{+}", "Ca{2+}", "K{+}"]},
         {"name": "T", "capacity": 4.0, "priority": ["Al{3+}", "Si{4+}"]},
     ]

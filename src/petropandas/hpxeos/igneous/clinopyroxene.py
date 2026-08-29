@@ -37,6 +37,8 @@ input defaulting to 0.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -145,13 +147,13 @@ xAlT       1 1    0  1  1/2  y
 
 class Clinopyroxene(Phase):
     abbreviation = "cpx_W24"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Fe{2+}", "Al{3+}", "Fe{3+}", "Cr{3+}", "Ti{4+}"],
         "M2": ["Mg{2+}", "Fe{2+}", "Ca{2+}", "Na{+}", "K{+}"],
         "T": ["Si{4+}", "Al{3+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = [
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = [
         "di",
         "cfs",
         "cats",
@@ -169,8 +171,8 @@ class Clinopyroxene(Phase):
     n_oxygens = 6
     ideal_cations = 4
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 2.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M1",

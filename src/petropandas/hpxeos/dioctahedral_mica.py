@@ -29,19 +29,21 @@ bulk composition -
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from .base import Phase
 
 
 class DioctahedralMica(Phase):
-    sites = {
+    sites: ClassVar = {
         "A": ["K{+}", "Na{+}", "Ca{2+}"],
         "M2A": ["Mg{2+}", "Fe{2+}", "Al{3+}"],
         "M2B": ["Al{3+}", "Fe{3+}"],
         "T1": ["Si{4+}", "Al{3+}"],
     }
-    optional_columns = {"Fe{3+}"}
+    optional_columns: ClassVar = {"Fe{3+}"}
 
     def site_fractions(self, composition: pd.DataFrame) -> pd.DataFrame:
         if "Fe{3+}" in composition:

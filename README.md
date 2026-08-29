@@ -109,14 +109,23 @@ accept an optional `order_parameters` dict, passed through
 
 ## API reference
 
+`OxidesAccessor`, `MolesAccessor`, `CationsAccessor`, and `BulkAccessor` share a common
+base with three methods, all operating on the accessor's data in whatever
+`petro_units` it's currently in (no forced conversion) and tagging the result with
+that same unit — `df.mineral` does **not** have these:
+
+| Method | Description |
+|--------|-------------|
+| `df.<accessor>.mean(*, groupby=None, weights=None)` | Mean across rows; `groupby` is a column name, `weights` is a column name or an array-like of numbers (list/`numpy.ndarray`/`pandas.Series`, matched to rows by position) |
+| `df.<accessor>.reframe(columns)` | Exactly the given ordered columns; missing ones filled with `0.0` |
+| `df.<accessor>.normalize(to=100.0)` | Normalise rows to sum to `to` |
+
 ### OxidesAccessor (`df.oxides`)
 
 | Method | Description |
 |--------|-------------|
 | `df.oxides()` | Return copy with only recognised oxide columns (wt%) |
 | `df.oxides.sorted()` | Return oxide wt% with columns in petrological order |
-| `df.oxides.normalized()` | Normalise wt% to sum to 100% |
-| `df.oxides.mean(*, groupby=None)` | Mean oxide wt%, optionally grouped by a column |
 | `df.oxides.split_valence(elem, method, n_oxy, ideal_cat)` | Split element into low/high charge oxides (wt%) |
 | `df.oxides.oxidize(o_excess)` | Split FeO into FeO/Fe₂O₃ by excess oxygen (THERMOCALC) |
 | `df.oxides.reduce()` | Merge Fe₂O₃ back into FeO equivalent |
@@ -127,7 +136,6 @@ accept an optional `order_parameters` dict, passed through
 | Method | Description |
 |--------|-------------|
 | `df.moles()` | Return oxide columns as molar proportions |
-| `df.moles.normalized()` | Normalise molar proportions to sum to 100% |
 
 ### CationsAccessor (`df.cations`)
 
@@ -144,7 +152,7 @@ Chains work seamlessly: `df.oxides().moles().oxides()` roundtrips back to wt%.
 
 | Method | Description |
 |--------|-------------|
-| `df.mineral.apfu(mineral)` | Element APFU with valence splits for a mineral |
+| `df.mineral.apfu(mineral)` | Element APFU with valence splits for a mineral; columns ordered by decreasing charge then increasing ionic radius (T → M → A/B/X) |
 | `df.mineral.site_allocations(mineral)` | Site allocations with hierarchical (site, cation) columns |
 | `df.mineral.end_members(mineral)` | End-member proportions (%) |
 | `df.mineral.check_stoichiometry(mineral)` | Stoichiometry validation scores (0–1) |
@@ -154,10 +162,10 @@ Chains work seamlessly: `df.oxides().moles().oxides()` roundtrips back to wt%.
 | Method | Description |
 |--------|-------------|
 | `df.bulk()` | Return cleaned copy in wt% |
-| `df.bulk.mean(*, groupby=None, weights=None)` | Mean oxide wt%; optional weighted mean |
 | `df.bulk.cipw()` | Simple CIPW normative mineralogy |
 | `df.bulk.alumina_saturation(classify=False)` | A/NK and A/CNK molar ratios; optional Shand classification |
 | `df.bulk.oxide_ratios()` | Common ratios (Mg#, FeOT, total alkalis, K/Na, etc.) |
+| `df.bulk.fractionate(profile, fraction, *, mineral=None, order="core-to-rim")` | Subtract a fractionating mineral (volume-integrated from a radial EPMA profile) from the bulk via molar mass balance |
 | `df.bulk.TCbulk(*, system, ...)` | THERMOCALC bulk script output |
 | `df.bulk.Perplexbulk(*, system, ...)` | PerpleX thermodynamic component list output |
 | `df.bulk.MAGEMin(*, db, ...)` | MAGEMin bulk input file output |

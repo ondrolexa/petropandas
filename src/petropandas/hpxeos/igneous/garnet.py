@@ -34,6 +34,8 @@ recoverable from bulk composition.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -80,19 +82,19 @@ xTiM2      1 1    0  1  1  t
 
 class Garnet(Phase):
     abbreviation = "g_W24"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Fe{2+}", "Ca{2+}"],
         "M2": ["Al{3+}", "Cr{3+}", "Fe{3+}", "Mg{2+}", "Ti{4+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["py", "alm", "gr", "andr", "knor", "tig"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["py", "alm", "gr", "andr", "knor", "tig"]
 
     # -- petropandas Mineral metadata (from old TC_g) --
     n_oxygens = 12
     ideal_cations = 8
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "Z", "capacity": 3.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "Y",

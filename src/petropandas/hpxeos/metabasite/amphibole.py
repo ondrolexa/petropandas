@@ -47,6 +47,8 @@ override z (and a/k if relevant) explicitly for those.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -169,15 +171,15 @@ xOV        1 1    0  1  1  t
 
 class Amphibole(Phase):
     abbreviation = "hb"
-    sites = {
+    sites: ClassVar = {
         "A": ["Na{+}", "K{+}"],
         "M13": ["Mg{2+}", "Fe{2+}"],
         "M2": ["Mg{2+}", "Fe{2+}", "Al{3+}", "Fe{3+}", "Ti{4+}"],
         "M4": ["Ca{2+}", "Mg{2+}", "Fe{2+}", "Na{+}"],
         "T": ["Si{4+}", "Al{3+}"],  # T1 mixing site only (T2 is fixed, always Si)
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = [
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = [
         "tr",
         "tsm",
         "prgm",
@@ -196,8 +198,8 @@ class Amphibole(Phase):
     n_oxygens = 23
     ideal_cations = 15
     analytical_total_range = (96.0, 99.0)
-    valence_splits = [{"element": "Fe", "method": "schumacher"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "schumacher"}]
+    site_definitions: ClassVar = [
         {"name": "A", "capacity": 1.0, "priority": ["K{+}", "Na{+}"]},
         {
             "name": "B",

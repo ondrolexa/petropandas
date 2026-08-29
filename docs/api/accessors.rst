@@ -11,6 +11,7 @@ OxidesAccessor
    :members:
    :undoc-members:
    :show-inheritance:
+   :inherited-members: object
 
 MolesAccessor
 -------------
@@ -19,14 +20,16 @@ MolesAccessor
    :members:
    :undoc-members:
    :show-inheritance:
+   :inherited-members: object
 
-ApfuAccessor
-------------
+CationsAccessor
+---------------
 
-.. autoclass:: petropandas._accessors.ApfuAccessor
+.. autoclass:: petropandas._accessors.CationsAccessor
    :members:
    :undoc-members:
    :show-inheritance:
+   :inherited-members: object
 
 MineralAccessor
 ---------------
@@ -35,6 +38,7 @@ MineralAccessor
    :members:
    :undoc-members:
    :show-inheritance:
+   :inherited-members: object
 
 BulkAccessor
 ------------
@@ -43,6 +47,7 @@ BulkAccessor
    :members:
    :undoc-members:
    :show-inheritance:
+   :inherited-members: object
 
 MineralSeriesAccessor
 ---------------------

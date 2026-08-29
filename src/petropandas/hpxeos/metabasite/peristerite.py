@@ -12,6 +12,8 @@ cation sum; no vacancy, no other occupants, no order parameter).
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -32,15 +34,15 @@ xCaA       1 1    0  1  1  ca
 
 class Peristerite(Phase):
     abbreviation = "abc"
-    sites = {"A": ["Na{+}", "Ca{2+}"]}
-    end_member_names = ["abm", "anm"]
+    sites: ClassVar = {"A": ["Na{+}", "Ca{2+}"]}
+    end_member_names: ClassVar = ["abm", "anm"]
 
     # -- petropandas Mineral metadata (NEW: albite-oligoclase exsolution, no K) --
     n_oxygens = 8
     ideal_cations = None
     analytical_total_range = (98.5, 101.5)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "A", "capacity": 1.0, "priority": ["Na{+}", "Ca{2+}"]},
         {"name": "T", "capacity": 4.0, "priority": ["Al{3+}", "Si{4+}"]},
     ]

@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Sequence
 
 import pandas as pd
 
-import petropandas._calc as _calc
+from petropandas import _calc
 from petropandas._config import ppconfig
 from petropandas._core import ALIASES
 from petropandas._core import _formula_cols as _core_formula_cols
 from petropandas._core import _is_oxide as _core_is_oxide
 from petropandas._core import _oxide_cols as _core_oxide_cols
 from petropandas._minerals import Mineral
-
 
 # ---------------------------------------------------------------------------
 # Canonical column order
@@ -128,6 +128,189 @@ class _CleaningAccessor:
     def __init__(self, obj: pd.DataFrame) -> None:
         self._obj = _clean_df(obj) if _needs_cleanup(obj) else obj.copy()
 
+    def _units(self) -> str:
+        return self._obj.attrs.get("petro_units", "wt%")
+
+
+class _BaseAccessor(_CleaningAccessor):
+    """Shared row-wise helpers for the DataFrame-shape accessors.
+
+    Adds ``mean()``, ``reframe()``, ``normalize()``, and ``select()`` on
+    top of ``_CleaningAccessor``'s cleaning constructor. Used by
+    ``OxidesAccessor``, ``MolesAccessor``, ``CationsAccessor``, and
+    ``BulkAccessor`` — not ``MineralAccessor``, which stays on the plain
+    ``_CleaningAccessor`` base.
+    """
+
+    def normalize(self, to: float = 100.0) -> pd.DataFrame:
+        """Normalise formula columns so each row sums to *to*.
+
+        Converts through the accessor's own callable form first (e.g.
+        wt% for ``df.oxides``, moles for ``df.moles``) so the result's
+        ``petro_units`` always matches what the accessor represents,
+        rather than being hardcoded or left stale.
+
+        Args:
+            to: Target row sum (default 100).
+
+        Returns:
+            Normalised DataFrame, tagged with the resulting
+            ``petro_units``.
+        """
+        converted = self()
+        units = converted.attrs.get("petro_units", self._units())
+        result = _calc.normalize(converted, to=to)
+        result.attrs["petro_units"] = units
+        return result
+
+    def reframe(self, columns: list[str]) -> pd.DataFrame:
+        """Return a DataFrame with exactly the requested columns.
+
+        Columns present in the underlying data are kept as-is.
+        Missing columns are filled with zeros.
+
+        Args:
+            columns: Ordered list of column names for the output.
+
+        Returns:
+            DataFrame with the same index as the input and columns
+            in the requested order, tagged with the accessor's
+            current ``petro_units``.
+        """
+        result = _reframe_columns(self._obj, columns)
+        result.attrs["petro_units"] = self._units()
+        return result
+
+    def mean(
+        self,
+        *,
+        groupby: str | None = None,
+        weights: str | Sequence[float] | None = None,
+    ) -> pd.DataFrame:
+        """Compute the mean across rows in the accessor's current units.
+
+        Operates on ``self._obj`` as-is — it does not force a unit
+        conversion, so the result reflects whatever ``petro_units``
+        (wt%, moles, or apfu) the accessor's data is currently in.
+
+        Args:
+            groupby: Column name to group by. When *None* (default) a
+                single-row DataFrame with the overall mean is returned.
+                When given, one row per group is returned with the group
+                label as index.
+            weights: Weights for a weighted mean. Either a column name to
+                use as weights (excluded from the result), or an iterable
+                of numbers (e.g. a list or `numpy.ndarray`) with one weight
+                per row, matched to rows positionally/by order — if a
+                `pandas.Series` is passed, its own index is ignored. When
+                *None* (default), an unweighted arithmetic mean is computed.
+
+        Returns:
+            DataFrame with mean values, tagged with the accessor's
+            current ``petro_units``.
+
+        Raises:
+            ValueError: If *groupby* or *weights* names a missing column,
+                or if an array-like *weights* has a different length than
+                the number of rows.
+        """
+        if groupby is not None and groupby not in self._obj.columns:
+            msg = f"Groupby column {groupby!r} not found in DataFrame"
+            raise ValueError(msg)
+
+        if weights is None:
+            weight_series = None
+        elif isinstance(weights, str):
+            if weights not in self._obj.columns:
+                msg = f"Weights column {weights!r} not found in DataFrame"
+                raise ValueError(msg)
+            weight_series = self._obj[weights]
+        else:
+            weights = list(weights)
+            if len(weights) != len(self._obj):
+                msg = (
+                    f"weights length ({len(weights)}) does not match "
+                    f"number of rows ({len(self._obj)})"
+                )
+                raise ValueError(msg)
+            weight_series = pd.Series(weights, index=self._obj.index, dtype=float)
+
+        cols = _core_formula_cols(self._obj)
+
+        if weight_series is None:
+            if groupby is not None:
+                result = self._obj.groupby(groupby)[cols].mean()
+            else:
+                result = pd.DataFrame({col: [self._obj[col].mean()] for col in cols})
+        else:
+            weighted = self._obj[cols].mul(weight_series, axis=0)
+            if groupby is not None:
+                weight_sums = weight_series.groupby(self._obj[groupby]).sum()
+                grouped = weighted.groupby(self._obj[groupby]).sum()
+                result = grouped.div(weight_sums, axis=0)
+            else:
+                weight_sum = weight_series.sum()
+                result = pd.DataFrame(
+                    {col: [weighted[col].sum() / weight_sum] for col in cols}
+                )
+
+        result.attrs["petro_units"] = self._units()
+        return result
+
+    def select(
+        self,
+        arg: str | list | pd.Series,
+        *,
+        on: str | None = None,
+    ) -> pd.DataFrame:
+        """Filter rows by index, column values, or boolean mask.
+
+        Args:
+            arg: Selection criterion:
+
+                - ``str`` — keep rows where the target *contains* the
+                  substring (case-sensitive).
+                - ``list`` — keep rows where the target *is in* the list.
+                - ``pd.Series`` (bool) — logical row indexing; the Series
+                  must have the same index as the DataFrame.
+
+            on: Column whose values are tested against *arg*.  When
+                *None* (default), the DataFrame index is tested instead.
+                Ignored when *arg* is a boolean Series.
+
+        Returns:
+            Filtered copy of the DataFrame with ``petro_units`` preserved.
+        """
+        if isinstance(arg, pd.Series):
+            if not arg.index.equals(self._obj.index):
+                msg = (
+                    "Boolean Series index does not match DataFrame index; "
+                    "reindex before calling select()"
+                )
+                raise ValueError(msg)
+            out = self._obj.loc[arg]
+        elif isinstance(arg, str):
+            if on is None and self._obj.index.dtype.kind in ("i", "f"):
+                warnings.warn(
+                    "Index is numeric; select() with a string argument "
+                    "may not match as expected",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            target = self._obj.index if on is None else self._obj[on]
+            mask = target.astype(str).str.contains(arg)
+            out = self._obj.loc[mask]
+        elif isinstance(arg, list):
+            target = self._obj.index if on is None else self._obj[on]
+            mask = target.isin(arg)
+            out = self._obj.loc[mask]
+        else:
+            msg = f"arg must be str, list, or Series, got {type(arg).__name__}"
+            raise TypeError(msg)
+        out = out.copy()
+        out.attrs["petro_units"] = self._units()
+        return out
+
 
 # ---------------------------------------------------------------------------
 # MineralAccessor — general tools + mineral calculations
@@ -142,9 +325,6 @@ class MineralAccessor(_CleaningAccessor):
 
     def _oxide_cols(self) -> list[str]:
         return _core_oxide_cols(self._obj)
-
-    def _units(self) -> str:
-        return self._obj.attrs.get("petro_units", "wt%")
 
     # -- mineral calculations ------------------------------------------------
 
@@ -234,7 +414,7 @@ class MineralAccessor(_CleaningAccessor):
 
 
 @pd.api.extensions.register_dataframe_accessor("oxides")
-class OxidesAccessor(_CleaningAccessor):
+class OxidesAccessor(_BaseAccessor):
     """Callable accessor (``df.oxides``).
 
     ``df.oxides()`` returns a copy of the DataFrame containing only
@@ -261,43 +441,12 @@ class OxidesAccessor(_CleaningAccessor):
         out = out[_sort_oxide_columns(list(out.columns))]
         return out
 
-    def normalized(self) -> pd.DataFrame:
-        """Normalise oxide wt% so each row sums to 100 %."""
-        result = _calc.normalize(self())
-        result.attrs["petro_units"] = "wt%"
-        return result
-
-    def mean(self, *, groupby: str | None = None) -> pd.DataFrame:
-        """Compute mean oxide wt% across rows.
-
-        Args:
-            groupby: Column name to group by.  When *None* (default)
-                a single-row DataFrame with the overall mean is
-                returned.  When a column name is given, one row per
-                group is returned with the group label as index.
-
-        Returns:
-            DataFrame with mean oxide values.
-        """
-        out = self()
-        if groupby is not None:
-            if groupby not in self._obj.columns:
-                msg = f"Groupby column {groupby!r} not found in DataFrame"
-                raise ValueError(msg)
-            result = self._obj.groupby(groupby)[list(out.columns)].mean()
-        else:
-            result = pd.DataFrame(
-                {col: [out[col].mean()] for col in out.columns},
-            )
-        result.attrs["petro_units"] = "wt%"
-        return result
-
     def split_valence(
         self,
         element: str,
         method: str,
-        n_oxygens: int | float,
-        ideal_cations: int | float,
+        n_oxygens: float,
+        ideal_cations: float,
     ) -> pd.DataFrame:
         """Split an element into low/high-charge oxide columns.
 
@@ -377,60 +526,6 @@ class OxidesAccessor(_CleaningAccessor):
         result.attrs["petro_units"] = "wt%"
         return result
 
-    def select(
-        self,
-        arg: str | list | pd.Series,
-        *,
-        on: str | None = None,
-    ) -> pd.DataFrame:
-        """Filter rows by index, column values, or boolean mask.
-
-        Args:
-            arg: Selection criterion:
-
-                - ``str`` — keep rows where the target *contains* the
-                  substring (case-sensitive).
-                - ``list`` — keep rows where the target *is in* the list.
-                - ``pd.Series`` (bool) — logical row indexing; the Series
-                  must have the same index as the DataFrame.
-
-            on: Column whose values are tested against *arg*.  When
-                *None* (default), the DataFrame index is tested instead.
-                Ignored when *arg* is a boolean Series.
-
-        Returns:
-            Filtered copy of the DataFrame with ``petro_units`` preserved.
-        """
-        if isinstance(arg, pd.Series):
-            if not arg.index.equals(self._obj.index):
-                msg = (
-                    "Boolean Series index does not match DataFrame index; "
-                    "reindex before calling select()"
-                )
-                raise ValueError(msg)
-            out = self._obj.loc[arg]
-        elif isinstance(arg, str):
-            if on is None and self._obj.index.dtype.kind in ("i", "f"):
-                warnings.warn(
-                    "Index is numeric; select() with a string argument "
-                    "may not match as expected",
-                    UserWarning,
-                    stacklevel=2,
-                )
-            target = self._obj.index if on is None else self._obj[on]
-            mask = target.astype(str).str.contains(arg)
-            out = self._obj.loc[mask]
-        elif isinstance(arg, list):
-            target = self._obj.index if on is None else self._obj[on]
-            mask = target.isin(arg)
-            out = self._obj.loc[mask]
-        else:
-            msg = f"arg must be str, list, or Series, got {type(arg).__name__}"
-            raise TypeError(msg)
-        out = out.copy()
-        out.attrs["petro_units"] = self._obj.attrs.get("petro_units", "wt%")
-        return out
-
 
 # ---------------------------------------------------------------------------
 # MolesAccessor — callable, returns molar-proportions DataFrame
@@ -438,7 +533,7 @@ class OxidesAccessor(_CleaningAccessor):
 
 
 @pd.api.extensions.register_dataframe_accessor("moles")
-class MolesAccessor(_CleaningAccessor):
+class MolesAccessor(_BaseAccessor):
     """Callable accessor (``df.moles``).
 
     ``df.moles()`` returns a copy with oxide columns as molar proportions.
@@ -454,12 +549,6 @@ class MolesAccessor(_CleaningAccessor):
         out.attrs["petro_units"] = "moles"
         return out
 
-    def normalized(self) -> pd.DataFrame:
-        """Normalize moles to 100 mol%."""
-        result = _calc.normalize(self())
-        result.attrs["petro_units"] = "moles"
-        return result
-
 
 # ---------------------------------------------------------------------------
 # CationsAccessor — callable, returns APFU DataFrame
@@ -467,7 +556,7 @@ class MolesAccessor(_CleaningAccessor):
 
 
 @pd.api.extensions.register_dataframe_accessor("cations")
-class CationsAccessor(_CleaningAccessor):
+class CationsAccessor(_BaseAccessor):
     """Callable accessor (``df.cations``).
 
     ``df.cations(n_oxygens=N)`` or ``df.cations(n_cations=N)`` returns atoms
@@ -478,8 +567,8 @@ class CationsAccessor(_CleaningAccessor):
     def __call__(
         self,
         *,
-        n_oxygens: int | float | None = None,
-        n_cations: int | float | None = None,
+        n_oxygens: float | None = None,
+        n_cations: float | None = None,
     ) -> pd.DataFrame:
         """Convert to atoms per formula unit.
 
@@ -517,7 +606,7 @@ class CationsAccessor(_CleaningAccessor):
 
 
 @pd.api.extensions.register_dataframe_accessor("bulk")
-class BulkAccessor(_CleaningAccessor):
+class BulkAccessor(_BaseAccessor):
     """Bulk-rock geochemistry (``df.bulk``).
 
     ``df.bulk()`` returns a cleaned copy of the DataFrame in wt%.
@@ -530,26 +619,104 @@ class BulkAccessor(_CleaningAccessor):
         cols = _core_formula_cols(self._obj)
         return self._obj[cols].copy()
 
-    def normalized(self) -> pd.DataFrame:
-        """Normalise wt% so each row sums to 100 %."""
-        result = _calc.normalize(self())
-        result.attrs["petro_units"] = "wt%"
-        return result
+    def fractionate(
+        self,
+        profile: pd.DataFrame,
+        fraction: str | float | Sequence[float],
+        *,
+        mineral: Mineral | None = None,
+        order: str = "core-to-rim",
+        n_grid: int = 200,
+    ) -> pd.DataFrame:
+        """Subtract a fractionating mineral from the bulk composition.
 
-    def reframe(self, columns: list[str]) -> pd.DataFrame:
-        """Return a DataFrame with exactly the requested columns.
-
-        Columns present in the underlying data are kept as-is.
-        Missing columns are filled with zeros.
+        The mineral's own composition is zoned, so its contribution is the
+        volume-weighted average across a spherical grain, obtained by
+        integrating a radial EPMA profile with spherical-shell weighting
+        (see `references/api_reference.md` /
+        `petropandas._calc.integrate_radial_profile`). That single
+        integrated composition is then removed from each row of the bulk
+        composition via a molar (cation-mole) mass balance, and the result
+        is renormalised to each row's original oxide total.
 
         Args:
-            columns: Ordered list of column names for the output.
+            profile: DataFrame of oxide wt% analyses along one radial
+                traverse through the mineral grain, indexed by relative
+                position along the traverse (any monotonic numeric
+                coordinate — only relative ordering/spacing matters).
+            fraction: Molar fraction of mineral to remove from each bulk
+                row. Either a column name in this DataFrame, a single
+                float applied to every row, or an array-like of numbers
+                (list, `numpy.ndarray`, `pandas.Series`) with one fraction
+                per row, matched positionally.
+            mineral: When *None* (default), *fraction* is a plain
+                system-oxide (cation-mole) fraction. When a `Mineral`
+                instance is given (e.g. `Grt`), *fraction* is instead a
+                fraction of that mineral's formula units, scaled via its
+                `ideal_cations` (total cations per formula unit) onto the
+                same cation-mole basis.
+            order: Orientation of *profile*'s rows: ``"core-to-rim"``
+                (default), ``"rim-to-core"``, or ``"rim-core-rim"`` (a full
+                traverse through the grain, split at its midpoint into two
+                core-to-rim halves that are integrated separately and
+                averaged).
+            n_grid: Number of evenly spaced grid points used for the
+                monotone-cubic-spline resampling of *profile* before
+                integration.
 
         Returns:
-            DataFrame with the same index as the input and columns
-            in the requested order.
+            New bulk-rock oxide wt% DataFrame, tagged ``"wt%"``, with the
+            same index as this accessor's data and each row renormalised to
+            its original oxide total.
+
+        Raises:
+            ValueError: If *fraction* names a missing column, an array-like
+                *fraction* has a different length than the number of bulk
+                rows, or *mineral* is given but doesn't define
+                `ideal_cations`.
         """
-        return _reframe_columns(self._obj, columns)
+        if isinstance(fraction, str):
+            if fraction not in self._obj.columns:
+                msg = f"Fraction column {fraction!r} not found in DataFrame"
+                raise ValueError(msg)
+            fraction_series = self._obj[fraction]
+        elif isinstance(fraction, (int, float)):
+            fraction_series = pd.Series(
+                float(fraction), index=self._obj.index, dtype=float
+            )
+        else:
+            fraction = list(fraction)
+            if len(fraction) != len(self._obj):
+                msg = (
+                    f"fraction length ({len(fraction)}) does not match "
+                    f"number of rows ({len(self._obj)})"
+                )
+                raise ValueError(msg)
+            fraction_series = pd.Series(fraction, index=self._obj.index, dtype=float)
+
+        ideal_cations = None
+        if mineral is not None:
+            ideal_cations = mineral.ideal_cations
+            if ideal_cations is None:
+                msg = (
+                    f"{type(mineral).__name__} does not define ideal_cations, "
+                    "required to scale a formula-unit fraction"
+                )
+                raise ValueError(msg)
+
+        profile_clean = (
+            _clean_df(profile) if _needs_cleanup(profile) else profile.copy()
+        )
+        mineral_wt = _calc.integrate_radial_profile(
+            profile_clean, order=order, n_grid=n_grid
+        )
+
+        bulk_wt = _calc.convert(self._obj, "wt%", from_unit=self._units())
+        result = _calc.fractionate(
+            bulk_wt, mineral_wt, fraction_series, ideal_cations=ideal_cations
+        )
+        result.attrs["petro_units"] = "wt%"
+        return result
 
     def cipw_simple(self) -> pd.DataFrame:
         """Compute CIPW normative mineralogy (simple version).
@@ -671,55 +838,6 @@ class BulkAccessor(_CleaningAccessor):
             DataFrame with ratio columns.
         """
         return _calc.oxide_ratios(self())
-
-    def mean(
-        self, *, groupby: str | None = None, weights: str | None = None
-    ) -> pd.DataFrame:
-        """Compute mean oxide wt% across rows.
-
-        Args:
-            groupby: Column name to group by. When *None* (default) a
-                single-row DataFrame with the overall mean is returned.
-                When given, one row per group is returned with the group
-                label as index.
-            weights: Column name to use as weights for a weighted mean.
-                When *None* (default), an unweighted arithmetic mean is
-                computed. The weights column is excluded from the result.
-
-        Returns:
-            DataFrame with mean oxide values.
-
-        Raises:
-            ValueError: If *groupby* or *weights* names a missing column.
-        """
-        if groupby is not None and groupby not in self._obj.columns:
-            msg = f"Groupby column {groupby!r} not found in DataFrame"
-            raise ValueError(msg)
-        if weights is not None and weights not in self._obj.columns:
-            msg = f"Weights column {weights!r} not found in DataFrame"
-            raise ValueError(msg)
-
-        cols = _core_formula_cols(self._obj)
-
-        if weights is None:
-            if groupby is not None:
-                result = self._obj.groupby(groupby)[cols].mean()
-            else:
-                result = pd.DataFrame({col: [self._obj[col].mean()] for col in cols})
-        else:
-            weighted = self._obj[cols].mul(self._obj[weights], axis=0)
-            if groupby is not None:
-                weight_sums = self._obj.groupby(groupby)[weights].sum()
-                grouped = weighted.groupby(self._obj[groupby]).sum()
-                result = grouped.div(weight_sums, axis=0)
-            else:
-                weight_sum = self._obj[weights].sum()
-                result = pd.DataFrame(
-                    {col: [weighted[col].sum() / weight_sum] for col in cols}
-                )
-
-        result.attrs["petro_units"] = "wt%"
-        return result
 
     # ------------------------------------------------------------------
     # Thermodynamic software bulk formatting

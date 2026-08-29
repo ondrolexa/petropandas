@@ -34,6 +34,8 @@ an order-parameter override" pattern as `Chlorite`'s `clin` or `Olivine`'s `cfm`
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -108,20 +110,29 @@ xTiM       1 1    0  1  1/2  t
 
 class Spinel(Phase):
     abbreviation = "spl_T21"
-    sites = {
+    sites: ClassVar = {
         "T": ["Mg{2+}", "Fe{2+}", "Al{3+}", "Fe{3+}"],
         "M": ["Mg{2+}", "Fe{2+}", "Al{3+}", "Fe{3+}", "Cr{3+}", "Ti{4+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["nsp", "isp", "nhc", "ihc", "nmt", "imt", "picr", "usp"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = [
+        "nsp",
+        "isp",
+        "nhc",
+        "ihc",
+        "nmt",
+        "imt",
+        "picr",
+        "usp",
+    ]
     order_parameter_names = ("Q1", "Q2", "Q3")
 
     # -- petropandas Mineral metadata (from old TC_sp / TC_Spinel) --
     n_oxygens = 4
     ideal_cations = 3
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "M1", "capacity": 1.0, "priority": ["Mg{2+}", "Fe{2+}"]},
         {"name": "M2", "capacity": 2.0, "priority": ["Al{3+}", "Fe{3+}", "Ti{4+}"]},
     ]

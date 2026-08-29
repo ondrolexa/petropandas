@@ -25,6 +25,8 @@ as `Chlorite`'s pure `clin`).
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -61,19 +63,19 @@ xCaM2      1 1    0  1  1  c
 
 class Olivine(Phase):
     abbreviation = "ol_H18"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Fe{2+}"],
         "M2": ["Mg{2+}", "Fe{2+}", "Ca{2+}"],
     }
-    end_member_names = ["mont", "fa", "fo", "cfm"]
+    end_member_names: ClassVar = ["mont", "fa", "fo", "cfm"]
     order_parameter_names = ("Q",)
 
     # -- petropandas Mineral metadata (NEW: standard (Mg,Fe)2SiO4 olivine formula) --
     n_oxygens = 4
     ideal_cations = 3
     analytical_total_range = (98.0, 101.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 1.0, "priority": ["Si{4+}"]},
         {
             "name": "M",

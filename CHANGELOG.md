@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- mineral-fractionation mass balance for spherical grains
+- `mean()`, `reframe()`, `normalize()`, and `select()` available on all accessors
+
+### Changed
+- `normalized()` renamed to `normalize(to=100.0)`, with a configurable target row sum
+- `mean()`'s `weights` argument now also accepts an array-like of numbers
+
 ## [0.1.4] - 2026-07-13
 
 ### Added

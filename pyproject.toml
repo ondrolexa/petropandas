@@ -15,6 +15,7 @@ dependencies = [
     "periodictable>=2.1.0",
     "requests>=2.31",
     "matplotlib>=3.7",
+    "python-calamine>=0.8.2",
 ]
 
 [project.urls]

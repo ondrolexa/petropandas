@@ -27,6 +27,8 @@ an optional caller-supplied input defaulting to 0.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -75,21 +77,21 @@ xAlT       1 1    0  2   1  f   1  y
 
 class Sapphirine(Phase):
     abbreviation = "sa"
-    sites = {
+    sites: ClassVar = {
         "M3": ["Mg{2+}", "Fe{2+}", "Fe{3+}", "Al{3+}"],
         "M456": ["Mg{2+}", "Fe{2+}"],
         "T": ["Si{4+}", "Al{3+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["spr4", "spr5", "fspm", "spro", "ospr"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["spr4", "spr5", "fspm", "spro", "ospr"]
     order_parameter_names = ("Q",)
 
     # -- petropandas Mineral metadata (from old TC_sa) --
     n_oxygens = 20
     ideal_cations = 5
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {
             "name": "M3",
             "capacity": 1.0,

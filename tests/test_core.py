@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 
 from petropandas._core import (
@@ -19,8 +20,6 @@ from petropandas._core import (
     _oxygens_per,
     _parse_ion,
 )
-
-import pandas as pd
 
 
 class TestIsOxide:

@@ -17,6 +17,8 @@ defaulting to 0 = fully disordered; see `resolve_order_parameters`).
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -134,22 +136,30 @@ xAlT2      1 1    0  2  1/2  f   1  y
 
 class Chlorite(Phase):
     abbreviation = "chl"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Fe{2+}", "Al{3+}"],
         "M23": ["Mg{2+}", "Fe{2+}"],
         "M4": ["Mg{2+}", "Fe{2+}", "Fe{3+}", "Al{3+}"],
         "T2": ["Si{4+}", "Al{3+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["clin", "afchl", "ames", "daph", "ochl1", "ochl4", "f3clin"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = [
+        "clin",
+        "afchl",
+        "ames",
+        "daph",
+        "ochl1",
+        "ochl4",
+        "f3clin",
+    ]
     order_parameter_names = ("QAl", "Q1", "Q4")
 
     # -- petropandas Mineral metadata (from old TC_chl / TC_Chlorite, Mn-free) --
     n_oxygens = 14
     ideal_cations = None
     analytical_total_range = (85.0, 90.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 4.0, "priority": ["Si{4+}", "Al{3+}"]},
         {"name": "M", "capacity": 6.0, "priority": ["Mg{2+}", "Fe{2+}", "Al{3+}"]},
     ]

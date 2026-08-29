@@ -17,6 +17,8 @@ recoverable from bulk composition, so it is an optional caller-supplied input
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -155,14 +157,14 @@ xAlT2      1 1    0  2  1/2  f   1  y
 
 class Chlorite(Phase):
     abbreviation = "chl"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Mn{2+}", "Fe{2+}", "Al{3+}"],
         "M23": ["Mg{2+}", "Mn{2+}", "Fe{2+}"],
         "M4": ["Mg{2+}", "Fe{2+}", "Fe{3+}", "Al{3+}"],
         "T2": ["Si{4+}", "Al{3+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = [
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = [
         "clin",
         "afchl",
         "ames",
@@ -178,8 +180,8 @@ class Chlorite(Phase):
     n_oxygens = 14
     ideal_cations = None
     analytical_total_range = (85.0, 90.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 4.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M",

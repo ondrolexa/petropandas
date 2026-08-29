@@ -28,6 +28,8 @@ garnet/chlorite/opx convention for unmodeled trace cations.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -95,21 +97,21 @@ xAlT       1 1    1/2  2  1/2  f  1/2  y
 
 class Biotite(Phase):
     abbreviation = "bi"
-    sites = {
+    sites: ClassVar = {
         "M3": ["Mg{2+}", "Mn{2+}", "Fe{2+}", "Fe{3+}", "Ti{4+}", "Al{3+}"],
         "M12": ["Mg{2+}", "Mn{2+}", "Fe{2+}"],
         "T": ["Si{4+}", "Al{3+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["phl", "annm", "obi", "east", "tbi", "fbi", "mmbi"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["phl", "annm", "obi", "east", "tbi", "fbi", "mmbi"]
     order_parameter_names = ("Q",)
 
     # -- petropandas Mineral metadata (from old TC_bi) --
     n_oxygens = 11
     ideal_cations = None
     analytical_total_range = (94.0, 97.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 4.0, "priority": ["Si{4+}", "Al{3+}"]},
         {"name": "I", "capacity": 1.0, "priority": ["K{+}", "Na{+}"]},
         {

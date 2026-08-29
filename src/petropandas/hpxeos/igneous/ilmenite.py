@@ -28,6 +28,8 @@ overrides - only `dilm`/`dgk` (the disordered end-members) match the Q=Qt=0 defa
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -74,20 +76,20 @@ xMgB       2 1    0  2  1/2  Q  -1/2  Qt
 
 class Ilmenite(Phase):
     abbreviation = "ilm_W24"
-    sites = {
+    sites: ClassVar = {
         "A": ["Fe{2+}", "Ti{4+}", "Fe{3+}", "Mg{2+}"],
         "B": ["Fe{2+}", "Ti{4+}", "Fe{3+}", "Mg{2+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["oilm", "dilm", "hem", "ogk", "dgk"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["oilm", "dilm", "hem", "ogk", "dgk"]
     order_parameter_names = ("Q", "Qt")
 
     # -- petropandas Mineral metadata (from old TC_ilmm) --
     n_oxygens = 3
     ideal_cations = 2
     analytical_total_range = (99.0, 101.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {
             "name": "A",
             "capacity": 1.0,

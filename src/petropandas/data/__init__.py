@@ -27,7 +27,7 @@ with importlib.resources.as_file(src) as f:
 __all__ = [
     "avgpelite",
     "bulk",
-    "sazava",
     "grt_profile",
     "minerals",
+    "sazava",
 ]

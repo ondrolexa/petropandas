@@ -23,7 +23,6 @@ from petropandas import (
 )
 from petropandas._minerals import _score_trapezoidal
 
-
 # ---------------------------------------------------------------------------
 # _score_trapezoidal unit tests
 # ---------------------------------------------------------------------------

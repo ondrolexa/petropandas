@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -13,7 +14,6 @@ from petropandas._calc import (
     cipw_norm_simple,
     oxide_ratios,
 )
-
 
 # ---------------------------------------------------------------------------
 # BulkAccessor basics
@@ -73,17 +73,17 @@ class TestBulkAccessor:
         assert "F" in result.columns
         assert result["F"].iloc[0] == pytest.approx(0.4)
 
-    def test_normalized_sums_to_100(self, granite_bulk: pd.DataFrame) -> None:
-        result = granite_bulk.bulk.normalized()
+    def test_normalize_sums_to_100(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.normalize()
         assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
 
-    def test_normalized_preserves_units(self, granite_bulk: pd.DataFrame) -> None:
-        result = granite_bulk.bulk.normalized()
+    def test_normalize_preserves_units(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.normalize()
         assert result.attrs.get("petro_units") == "wt%"
 
-    def test_normalized_retains_elements(self) -> None:
+    def test_normalize_retains_elements(self) -> None:
         df = pd.DataFrame({"SiO2": [70.0], "Al2O3": [14.0], "F": [0.3]})
-        result = df.bulk.normalized()
+        result = df.bulk.normalize()
         assert "F" in result.columns
         assert result["F"].iloc[0] > 0
         assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
@@ -739,6 +739,47 @@ class TestBulkMean:
         df = pd.DataFrame({"SiO2": [60.0, 70.0], "rock": ["X", "Y"]})
         result = df.bulk.mean(groupby="rock")
         assert list(result.index) == ["X", "Y"]
+
+    def test_weighted_mean_with_list(self) -> None:
+        df = pd.DataFrame({"SiO2": [60.0, 70.0, 80.0], "Al2O3": [15.0, 13.0, 11.0]})
+        result = df.bulk.mean(weights=[1.0, 2.0, 3.0])
+        assert result["SiO2"].iloc[0] == pytest.approx(73.333333)
+        assert result["Al2O3"].iloc[0] == pytest.approx(12.333333)
+
+    def test_weighted_mean_with_numpy_array(self) -> None:
+        df = pd.DataFrame({"SiO2": [60.0, 70.0, 80.0], "Al2O3": [15.0, 13.0, 11.0]})
+        result = df.bulk.mean(weights=np.array([1.0, 2.0, 3.0]))
+        assert result["SiO2"].iloc[0] == pytest.approx(73.333333)
+        assert result["Al2O3"].iloc[0] == pytest.approx(12.333333)
+
+    def test_weighted_mean_with_pandas_series(self) -> None:
+        df = pd.DataFrame(
+            {"SiO2": [60.0, 70.0, 80.0], "Al2O3": [15.0, 13.0, 11.0]},
+            index=[10, 11, 12],
+        )
+        # default RangeIndex, deliberately not matching df's index
+        result = df.bulk.mean(weights=pd.Series([1.0, 2.0, 3.0]))
+        assert result["SiO2"].iloc[0] == pytest.approx(73.333333)
+        assert result["Al2O3"].iloc[0] == pytest.approx(12.333333)
+
+    def test_groupby_weighted_mean_with_array(self) -> None:
+        df = pd.DataFrame(
+            {
+                "SiO2": [60.0, 70.0, 80.0, 50.0],
+                "Al2O3": [15.0, 13.0, 11.0, 10.0],
+                "rock": ["A", "A", "B", "B"],
+            }
+        )
+        result = df.bulk.mean(groupby="rock", weights=[1.0, 2.0, 3.0, 1.0])
+        assert result.loc["A", "SiO2"] == pytest.approx(200.0 / 3.0)
+        assert result.loc["A", "Al2O3"] == pytest.approx(41.0 / 3.0)
+        assert result.loc["B", "SiO2"] == pytest.approx(72.5)
+        assert result.loc["B", "Al2O3"] == pytest.approx(10.75)
+
+    def test_weights_array_length_mismatch_raises(self) -> None:
+        df = pd.DataFrame({"SiO2": [60.0, 70.0, 80.0]})
+        with pytest.raises(ValueError, match="length"):
+            df.bulk.mean(weights=[1.0, 2.0])
 
     def test_missing_weights_column_raises(self) -> None:
         df = pd.DataFrame({"SiO2": [60.0, 70.0]})

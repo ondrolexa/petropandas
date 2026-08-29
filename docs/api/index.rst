@@ -43,7 +43,7 @@ Mineral Analysis Accessor
    * - Accessor
      - Description
    * - ``df.mineral.apfu(mineral)``
-     - Compute APFU with Fe\ :sup:`3+`/Fe\ :sup:`2+` splitting
+     - Compute APFU with Fe\ :sup:`3+`/Fe\ :sup:`2+` splitting; columns ordered by decreasing charge then increasing ionic radius
    * - ``df.mineral.site_allocations(mineral)``
      - Allocate cations to crystallographic sites
    * - ``df.mineral.end_members(mineral)``
@@ -70,6 +70,8 @@ Bulk Composition Accessor
      - A/NK and A/CNK molar ratios
    * - ``df.bulk.oxide_ratios()``
      - Mg#, Fe\ :sub:`OT`, total alkalis
+   * - ``df.bulk.fractionate(profile, fraction, *, mineral=None, order="core-to-rim")``
+     - Subtract a fractionating mineral, volume-integrated from a radial profile, via molar mass balance
    * - ``df.bulk.TCbulk()``
      - THERMOCALC bulk composition
    * - ``df.bulk.Perplexbulk()``

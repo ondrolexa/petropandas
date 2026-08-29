@@ -2,6 +2,8 @@
 
 __version__ = "0.2.0"
 
+import functools
+
 import pandas as pd
 
 from petropandas._accessors import (
@@ -14,7 +16,6 @@ from petropandas._accessors import (
 from petropandas._config import PPConfig, ppconfig
 from petropandas._core import ALIASES, MW
 from petropandas._database import PetroDB
-from petropandas._plotting import ProfilePlot, ScatterPlot, TernaryPlot
 from petropandas._minerals import (
     Amp,
     Bt,
@@ -34,14 +35,16 @@ from petropandas._minerals import (
     St,
     Ttn,
 )
+from petropandas._plotting import ProfilePlot, ScatterPlot, TernaryPlot
 from petropandas._series import MineralSeriesAccessor
 
 __all__ = [
     "ALIASES",
+    "MW",
     "Amp",
-    "CationsAccessor",
     "Bt",
     "BulkAccessor",
+    "CationsAccessor",
     "Chl",
     "Cld",
     "Cpx",
@@ -51,14 +54,13 @@ __all__ = [
     "Grt",
     "GrtFe3",
     "Ilm",
-    "MW",
     "Mineral",
     "MineralAccessor",
     "MineralSeriesAccessor",
     "MolesAccessor",
     "Ms",
-    "OxidesAccessor",
     "Opx",
+    "OxidesAccessor",
     "PPConfig",
     "PetroDB",
     "ProfilePlot",
@@ -70,3 +72,6 @@ __all__ = [
     "pd",
     "ppconfig",
 ]
+
+# Intercept and inject engine="calamine" as the default
+pd.read_excel = functools.partial(pd.read_excel, engine="calamine")

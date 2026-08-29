@@ -9,6 +9,8 @@ cation sum; M has no other occupants and no vacancy term).
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -31,15 +33,15 @@ xFeM    1 1      0  1  1  x
 
 class Olivine(Phase):
     abbreviation = "ol"
-    sites = {"M": ["Mg{2+}", "Fe{2+}"]}
-    end_member_names = ["fo", "fa"]
+    sites: ClassVar = {"M": ["Mg{2+}", "Fe{2+}"]}
+    end_member_names: ClassVar = ["fo", "fa"]
 
     # -- petropandas Mineral metadata (NEW: standard (Mg,Fe)2SiO4 olivine formula) --
     n_oxygens = 4
     ideal_cations = 3
     analytical_total_range = (98.0, 101.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 1.0, "priority": ["Si{4+}"]},
         {
             "name": "M",

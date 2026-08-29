@@ -14,6 +14,8 @@ parameter.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -36,15 +38,15 @@ xCa    1 1    0 1  1 ca
 
 class PlagioclaseIbar1(Phase):
     abbreviation = "pli"
-    sites = {"A": ["Na{+}", "Ca{2+}", "K{+}"]}
-    end_member_names = ["abhI", "an", "san"]
+    sites: ClassVar = {"A": ["Na{+}", "Ca{2+}", "K{+}"]}
+    end_member_names: ClassVar = ["abhI", "an", "san"]
 
     # -- petropandas Mineral metadata (NEW: same formula as Plagioclase, I-1 parameterisation) --
     n_oxygens = 8
     ideal_cations = None
     analytical_total_range = (98.5, 101.5)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "A", "capacity": 1.0, "priority": ["Na{+}", "Ca{2+}", "K{+}"]},
         {"name": "T", "capacity": 4.0, "priority": ["Al{3+}", "Si{4+}"]},
     ]

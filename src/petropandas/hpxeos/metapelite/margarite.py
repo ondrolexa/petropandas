@@ -7,6 +7,8 @@ site model this and `Muscovite` both use.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..dioctahedral_mica import DioctahedralMica
@@ -43,14 +45,14 @@ xAlT1      1 1    0  2  1/2  c  1/2  y
 
 class Margarite(DioctahedralMica):
     abbreviation = "ma"
-    end_member_names = ["mut", "celt", "fcelt", "pat", "ma", "fmu"]
+    end_member_names: ClassVar = ["mut", "celt", "fcelt", "pat", "ma", "fmu"]
 
     # -- petropandas Mineral metadata (from old TC_ma) --
     n_oxygens = 13
     ideal_cations = 5
     analytical_total_range = (96.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "A", "capacity": 1.0, "priority": ["K{+}", "Na{+}", "Ca{2+}"]},
         {"name": "M2A", "capacity": 1.0, "priority": ["Mg{2+}", "Fe{2+}", "Al{3+}"]},
         {"name": "M2B", "capacity": 1.0, "priority": ["Al{3+}", "Fe{3+}"]},

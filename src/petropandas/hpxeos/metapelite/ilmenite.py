@@ -15,6 +15,8 @@ order-disorder phases - it is an optional caller-supplied input defaulting to 0.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -47,20 +49,20 @@ xFe3B  1 1    1  1 -1  x
 
 class Ilmenite(Phase):
     abbreviation = "ilm"
-    sites = {
+    sites: ClassVar = {
         "A": ["Fe{2+}", "Ti{4+}", "Fe{3+}"],
         "B": ["Fe{2+}", "Ti{4+}", "Fe{3+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["oilm", "dilm", "dhem"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["oilm", "dilm", "dhem"]
     order_parameter_names = ("Q",)
 
     # -- petropandas Mineral metadata (from existing Ilm) --
     n_oxygens = 3
     ideal_cations = 2
     analytical_total_range = (93.0, 100.5)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {
             "name": "A",
             "capacity": 1.0,

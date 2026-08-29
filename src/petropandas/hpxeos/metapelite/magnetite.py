@@ -24,6 +24,8 @@ supplied, keeping this phase's "no caller input" behavior actually disordered.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase
@@ -50,19 +52,19 @@ xFeT   1 1    1    1  -1   Q
 
 class Magnetite(Phase):
     abbreviation = "mt1"
-    sites = {
+    sites: ClassVar = {
         "T": ["Fe{2+}", "Fe{3+}"],
         "M": ["Fe{2+}", "Fe{3+}", "Ti{4+}"],
     }
-    end_member_names = ["imt", "dmt", "usp"]
+    end_member_names: ClassVar = ["imt", "dmt", "usp"]
     order_parameter_names = ("Q",)
 
     # -- petropandas Mineral metadata (NEW: derived from existing Spl, Fe-Ti oxide) --
     n_oxygens = 4
     ideal_cations = 3
     analytical_total_range = (93.0, 100.5)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 1.0, "priority": ["Mg{2+}", "Fe{2+}", "Mn{2+}"]},
         {
             "name": "M",

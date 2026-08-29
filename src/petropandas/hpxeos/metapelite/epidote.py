@@ -18,6 +18,8 @@ f), so the Q=0 default is not a physically typical assumption here.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -41,19 +43,19 @@ xAlM3   1  1    1  2 -1  f  -1  Q
 
 class Epidote(Phase):
     abbreviation = "ep"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Al{3+}", "Fe{3+}"],
         "M3": ["Al{3+}", "Fe{3+}"],
     }
-    end_member_names = ["cz", "ep", "fep"]
+    end_member_names: ClassVar = ["cz", "ep", "fep"]
     order_parameter_names = ("Q",)
 
     # -- petropandas Mineral metadata (from old TC_ep / TC_Epidote) --
     n_oxygens = 12.5
     ideal_cations = None
     analytical_total_range = (98.0, 102.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "M1", "capacity": 1.0, "priority": ["Al{3+}", "Fe{3+}"]},
         {"name": "M3", "capacity": 1.0, "priority": ["Al{3+}", "Fe{3+}"]},
     ]

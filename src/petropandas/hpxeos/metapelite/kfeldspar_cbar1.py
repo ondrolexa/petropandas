@@ -10,6 +10,8 @@ site is tracked in this older model. No hidden order-disorder parameter.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -36,15 +38,15 @@ xCa        1 1    0  1  1  ca
 
 class KFeldsparCbar1(Phase):
     abbreviation = "ksp"
-    sites = {"A": ["Na{+}", "Ca{2+}", "K{+}"]}
-    end_member_names = ["san", "abh", "anC"]
+    sites: ClassVar = {"A": ["Na{+}", "Ca{2+}", "K{+}"]}
+    end_member_names: ClassVar = ["san", "abh", "anC"]
 
     # -- petropandas Mineral metadata (NEW: same formula as KFeldspar, C-1 parameterisation) --
     n_oxygens = 8
     ideal_cations = None
     analytical_total_range = (98.5, 101.5)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "A", "capacity": 1.0, "priority": ["Na{+}", "Ca{2+}", "K{+}"]},
         {"name": "T", "capacity": 4.0, "priority": ["Al{3+}", "Si{4+}"]},
     ]

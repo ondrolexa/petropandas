@@ -25,7 +25,6 @@ from petropandas._minerals import (
     Ttn,
 )
 
-
 # ---------------------------------------------------------------------------
 # Base class
 # ---------------------------------------------------------------------------
@@ -946,3 +945,37 @@ class TestAccessorIntegration:
         result = mn_garnet.mineral.end_members(Grt)
         row_sum = result.sum(axis=1).iloc[0]
         assert row_sum == pytest.approx(100.0, abs=1.0)
+
+
+# ---------------------------------------------------------------------------
+# apfu() column ordering — decreasing charge, then increasing ionic radius
+# ---------------------------------------------------------------------------
+
+
+class TestApfuColumnOrder:
+    def test_garnet_charge_groups_in_order(self, mn_garnet: pd.DataFrame) -> None:
+        cols = list(Grt.apfu(mn_garnet).columns)
+        assert cols.index("Si{4+}") < cols.index("Al{3+}")
+        assert cols.index("Al{3+}") < cols.index("Fe{2+}")
+        assert cols.index("Al{3+}") < cols.index("Mg{2+}")
+        assert cols.index("Al{3+}") < cols.index("Mn{2+}")
+        assert cols.index("Mg{2+}") < cols.index("Ca{2+}")
+
+    def test_amphibole_full_span_including_alkalis(
+        self, amphibole_multi: pd.DataFrame
+    ) -> None:
+        cols = list(Amp.apfu(amphibole_multi).columns)
+        assert cols.index("Si{4+}") < cols.index("Ti{4+}")
+        assert cols.index("Ti{4+}") < cols.index("Al{3+}")
+        assert cols.index("Al{3+}") < cols.index("Mg{2+}")
+        assert cols.index("Mg{2+}") < cols.index("Ca{2+}")
+        assert cols.index("Ca{2+}") < cols.index("Na{+}")
+        assert cols.index("Na{+}") < cols.index("K{+}")
+
+    def test_biotite_mg_before_ca_alkalis_last(
+        self, biotite_multi: pd.DataFrame
+    ) -> None:
+        cols = list(Bt.apfu(biotite_multi).columns)
+        assert cols.index("Al{3+}") < cols.index("Mg{2+}")
+        assert cols.index("Mg{2+}") < cols.index("Na{+}")
+        assert cols.index("Na{+}") < cols.index("K{+}")

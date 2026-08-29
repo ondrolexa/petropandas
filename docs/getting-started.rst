@@ -59,7 +59,7 @@ Working with Oxides
    df.oxides.sorted()
 
    # Normalize to 100 wt%
-   df.oxides.normalized()
+   df.oxides.normalize()
 
    # Group averages
    df.oxides.mean(groupby="rock_type")

@@ -15,6 +15,8 @@ Fe3+ defaults to 0 if not analyzed.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -48,19 +50,19 @@ x(Fe2)      1 1    0  1  1  x
 
 class Spinel(Phase):
     abbreviation = "sp"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Fe{2+}"],
         "M2": ["Al{3+}", "Fe{3+}", "Ti{4+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["herc", "sp", "mt", "usp"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["herc", "sp", "mt", "usp"]
 
     # -- petropandas Mineral metadata (from old TC_sp / TC_Spinel) --
     n_oxygens = 4
     ideal_cations = 3
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "M1", "capacity": 1.0, "priority": ["Mg{2+}", "Fe{2+}"]},
         {"name": "M2", "capacity": 2.0, "priority": ["Al{3+}", "Fe{3+}", "Ti{4+}"]},
     ]

@@ -12,6 +12,8 @@ per-site allocation, no shared-element mass balance needed).
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -48,18 +50,18 @@ xFe3Y      1 1    0  1  1  f
 
 class Garnet(Phase):
     abbreviation = "g"
-    sites = {
+    sites: ClassVar = {
         "X": ["Mg{2+}", "Fe{2+}", "Ca{2+}"],
         "Y": ["Al{3+}", "Fe{3+}"],
     }
-    end_member_names = ["py", "alm", "gr", "kho"]
+    end_member_names: ClassVar = ["py", "alm", "gr", "kho"]
 
     # -- petropandas Mineral metadata (from old TC_g, Mn-free) --
     n_oxygens = 12
     ideal_cations = 8
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "Z", "capacity": 3.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "Y",

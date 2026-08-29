@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from periodictable import O as _O
 from periodictable import formula
-
 
 # ---------------------------------------------------------------------------
 # EMPA column aliases -> standard oxide formula
@@ -37,16 +36,18 @@ ALIASES: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def _safe_formula(col: str):
     """Parse *col* as a periodictable formula, or return None if invalid."""
     try:
         return formula(col)
-    except Exception:
+    except Exception:  # noqa: BLE001 — periodictable's parser raises varying,
+        # undocumented exception types (ValueError, pyparsing errors, ...) for
+        # unparseable strings; any of them just means "not a formula".
         return None
 
 
-@lru_cache(maxsize=None)
+@cache
 def _is_oxide(col: str) -> bool:
     """Return True if *col* parses as a formula containing oxygen."""
     f = _safe_formula(col)
@@ -58,7 +59,7 @@ def _oxide_cols(df) -> list[str]:
     return [c for c in df.columns if _is_oxide(c)]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _is_formula(col: str) -> bool:
     """Return True if *col* parses as any valid chemical formula."""
     return _safe_formula(col) is not None
@@ -69,7 +70,7 @@ def _formula_cols(df) -> list[str]:
     return [c for c in df.columns if _is_formula(c)]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _element_of(oxide: str) -> str:
     """Return the cation symbol for an oxide formula.
 
@@ -80,13 +81,13 @@ def _element_of(oxide: str) -> str:
         Element symbol (e.g. ``"Fe"``).
     """
     atoms = formula(oxide).atoms
-    for el, count in atoms.items():
+    for el in atoms:
         if el != _O:
             return el.symbol
     return ""
 
 
-@lru_cache(maxsize=None)
+@cache
 def _cations_per(oxide: str) -> int:
     """Return the number of cation atoms in one formula unit.
 
@@ -100,7 +101,7 @@ def _cations_per(oxide: str) -> int:
     return sum(count for el, count in atoms.items() if el != _O)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _oxygens_per(oxide: str) -> int:
     """Return the number of oxygen atoms in one formula unit.
 
@@ -113,7 +114,7 @@ def _oxygens_per(oxide: str) -> int:
     return formula(oxide).atoms.get(_O, 0)
 
 
-@lru_cache(maxsize=None)
+@cache
 def MW(oxide: str) -> float:
     """Return molecular weight via periodictable.
 
@@ -197,7 +198,7 @@ def _element_symbol_from_ion(col: str) -> str | None:
         return result[0]
     try:
         return _element_of(col)
-    except Exception:
+    except Exception:  # noqa: BLE001 — see `_safe_formula`
         return None
 
 

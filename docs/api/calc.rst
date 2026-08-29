@@ -45,4 +45,8 @@ Petrological Calculations
 
 .. autofunction:: petropandas._calc.apatite_correction
 
+.. autofunction:: petropandas._calc.integrate_radial_profile
+
+.. autofunction:: petropandas._calc.fractionate
+
 .. autofunction:: petropandas._calc.cipw_norm

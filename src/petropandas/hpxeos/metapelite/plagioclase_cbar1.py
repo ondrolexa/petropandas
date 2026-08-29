@@ -12,6 +12,8 @@ bulk composition (the site only ever holds Na, Ca, K).
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -34,15 +36,15 @@ x(Ca)    1 1    0 1  1 ca
 
 class PlagioclaseCbar1(Phase):
     abbreviation = "plc"
-    sites = {"A": ["Na{+}", "Ca{2+}", "K{+}"]}
-    end_member_names = ["abh", "anC", "san"]
+    sites: ClassVar = {"A": ["Na{+}", "Ca{2+}", "K{+}"]}
+    end_member_names: ClassVar = ["abh", "anC", "san"]
 
     # -- petropandas Mineral metadata (NEW: same formula as Plagioclase, C-1 parameterisation) --
     n_oxygens = 8
     ideal_cations = None
     analytical_total_range = (98.5, 101.5)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "A", "capacity": 1.0, "priority": ["Na{+}", "Ca{2+}", "K{+}"]},
         {"name": "T", "capacity": 4.0, "priority": ["Al{3+}", "Si{4+}"]},
     ]

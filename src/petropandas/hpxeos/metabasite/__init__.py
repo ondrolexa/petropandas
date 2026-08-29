@@ -6,26 +6,7 @@ subset of) blocks already implemented for the metapelite axfile
 duplicated. See each name's source module for which case it is.
 """
 
-from .amphibole import TC_hb, Amphibole
-from .augite import TC_aug, Augite
-from .biotite import TC_bi, Biotite
-from .chlorite import TC_chl, Chlorite
-from .garnet import TC_g, Garnet
-from .ilmenite_mixed import TC_ilmm, IlmeniteMixed
-from .muscovite import TC_mu, Muscovite
-from .olivine import TC_ol, Olivine
-from .omphacite import TC_dio, Omphacite
-from .orthopyroxene import TC_opx, Orthopyroxene
-from .peristerite import TC_abc, Peristerite
-from .plagioclase_ibar1 import TC_pli, PlagioclaseIbar1
 from ..metapelite import (
-    TC_ep,
-    TC_ilm,
-    TC_k4tr,
-    TC_ksp,
-    TC_pl4tr,
-    TC_plc,
-    TC_sp,
     Epidote,
     Ilmenite,
     KFeldspar,
@@ -33,45 +14,64 @@ from ..metapelite import (
     Plagioclase,
     PlagioclaseCbar1,
     Spinel,
+    TC_ep,
+    TC_ilm,
+    TC_k4tr,
+    TC_ksp,
+    TC_pl4tr,
+    TC_plc,
+    TC_sp,
 )
+from .amphibole import Amphibole, TC_hb
+from .augite import Augite, TC_aug
+from .biotite import Biotite, TC_bi
+from .chlorite import Chlorite, TC_chl
+from .garnet import Garnet, TC_g
+from .ilmenite_mixed import IlmeniteMixed, TC_ilmm
+from .muscovite import Muscovite, TC_mu
+from .olivine import Olivine, TC_ol
+from .omphacite import Omphacite, TC_dio
+from .orthopyroxene import Orthopyroxene, TC_opx
+from .peristerite import Peristerite, TC_abc
+from .plagioclase_ibar1 import PlagioclaseIbar1, TC_pli
 
 __all__ = [
-    "Plagioclase",
-    "KFeldspar",
-    "KFeldsparCbar1",
-    "PlagioclaseCbar1",
-    "Epidote",
-    "Spinel",
-    "Ilmenite",
-    "Muscovite",
-    "Garnet",
-    "Orthopyroxene",
+    "Amphibole",
+    "Augite",
     "Biotite",
     "Chlorite",
+    "Epidote",
+    "Garnet",
+    "Ilmenite",
     "IlmeniteMixed",
+    "KFeldspar",
+    "KFeldsparCbar1",
+    "Muscovite",
     "Olivine",
-    "Peristerite",
-    "PlagioclaseIbar1",
-    "Augite",
     "Omphacite",
-    "Amphibole",
-    "TC_ep",
-    "TC_ilm",
-    "TC_k4tr",
-    "TC_ksp",
-    "TC_pl4tr",
-    "TC_plc",
-    "TC_sp",
-    "TC_mu",
-    "TC_g",
-    "TC_opx",
+    "Orthopyroxene",
+    "Peristerite",
+    "Plagioclase",
+    "PlagioclaseCbar1",
+    "PlagioclaseIbar1",
+    "Spinel",
+    "TC_abc",
+    "TC_aug",
     "TC_bi",
     "TC_chl",
-    "TC_ilmm",
-    "TC_ol",
-    "TC_abc",
-    "TC_pli",
-    "TC_aug",
     "TC_dio",
+    "TC_ep",
+    "TC_g",
     "TC_hb",
+    "TC_ilm",
+    "TC_ilmm",
+    "TC_k4tr",
+    "TC_ksp",
+    "TC_mu",
+    "TC_ol",
+    "TC_opx",
+    "TC_pl4tr",
+    "TC_plc",
+    "TC_pli",
+    "TC_sp",
 ]

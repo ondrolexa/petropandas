@@ -20,6 +20,8 @@ since composition alone gives no basis for a different default.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -48,16 +50,16 @@ xvH        1 1    1  1  -1  h
 
 class Cordierite(Phase):
     abbreviation = "cd_G25"
-    sites = {"X": ["Fe{2+}", "Mg{2+}"]}
-    end_member_names = ["crd", "fcrd", "hcrd"]
+    sites: ClassVar = {"X": ["Fe{2+}", "Mg{2+}"]}
+    end_member_names: ClassVar = ["crd", "fcrd", "hcrd"]
     order_parameter_names = ("h",)
 
     # -- petropandas Mineral metadata (from old TC_cd) --
     n_oxygens = 18
     ideal_cations = None
     analytical_total_range = (97.0, 101.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "X", "capacity": 2.0, "priority": ["Fe{2+}", "Mg{2+}", "Mn{2+}"]},
     ]
 

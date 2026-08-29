@@ -87,8 +87,8 @@ _VALID_UNITS = {"wt%", "moles", "apfu"}
 
 def _resolve_apfu_params(
     df: pd.DataFrame,
-    n_oxygens: int | float | None,
-    n_cations: int | float | None,
+    n_oxygens: float | None,
+    n_cations: float | None,
 ) -> tuple[int | float | None, int | float | None]:
     """Resolve exactly one of n_oxygens/n_cations, falling back to df.attrs.
 
@@ -121,8 +121,8 @@ def convert(
     to_unit: str,
     *,
     from_unit: str | None = None,
-    n_oxygens: int | float | None = None,
-    n_cations: int | float | None = None,
+    n_oxygens: float | None = None,
+    n_cations: float | None = None,
     total: float | pd.Series | None = None,
 ) -> pd.DataFrame:
     """Convert a DataFrame between unit systems (wt%, moles, APFU).
@@ -252,8 +252,8 @@ def _oxide_to_ion_col(oxide: str) -> str:
 def to_apfu(
     df: pd.DataFrame,
     *,
-    n_oxygens: int | float | None = None,
-    n_cations: int | float | None = None,
+    n_oxygens: float | None = None,
+    n_cations: float | None = None,
     units: str = "wt%",
 ) -> pd.DataFrame:
     """Convert oxide data to atoms per formula unit (APFU).
@@ -348,8 +348,8 @@ def to_apfu_by_charge(
 def from_apfu(
     apfu_df: pd.DataFrame,
     *,
-    n_oxygens: int | float | None = None,
-    n_cations: int | float | None = None,
+    n_oxygens: float | None = None,
+    n_cations: float | None = None,
     total: float | None = None,
 ) -> pd.DataFrame:
     """Convert APFU back to oxide wt%.
@@ -429,18 +429,80 @@ def from_apfu(
     return oxide_wt
 
 
-def normalize(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalise formula columns so each row sums to 100%.
+def normalize(df: pd.DataFrame, to: float | pd.Series = 100.0) -> pd.DataFrame:
+    """Normalise formula columns so each row sums to *to*.
 
     Args:
         df: DataFrame with formula columns (wt% or molar proportions).
+        to: Target row sum (default 100). Either a scalar applied to every
+            row, or a `pd.Series` aligned to `df.index` giving a different
+            target sum per row.
 
     Returns:
         Normalised DataFrame.
     """
     cols = _formula_cols(df)
     total = df[cols].sum(axis=1)
-    return df[cols].div(total, axis=0) * 100.0
+    return df[cols].div(total, axis=0).mul(to, axis=0)
+
+
+# Shannon effective ionic radii (VI-coordinate, high-spin where applicable), in
+# angstroms. Used only to break ties among cations of equal charge when
+# ordering APFU columns — not for crystallographic calculation, so approximate
+# values are fine as long as the relative ordering within each charge group is
+# right.
+_ION_RADIUS: dict[tuple[str, int], float] = {
+    ("P", 5): 0.17,
+    ("Nb", 5): 0.64,
+    ("Si", 4): 0.26,
+    ("Ti", 4): 0.605,
+    ("Sn", 4): 0.69,
+    ("Zr", 4): 0.72,
+    ("Al", 3): 0.535,
+    ("Cr", 3): 0.615,
+    ("V", 3): 0.64,
+    ("Fe", 3): 0.645,
+    ("Mn", 3): 0.645,
+    ("Ti", 3): 0.67,
+    ("Mg", 2): 0.72,
+    ("Zn", 2): 0.74,
+    ("Fe", 2): 0.78,
+    ("Mn", 2): 0.83,
+    ("Ca", 2): 1.00,
+    ("Sr", 2): 1.18,
+    ("Ba", 2): 1.35,
+    ("Na", 1): 1.02,
+    ("K", 1): 1.38,
+}
+
+
+def _apfu_sort_key(col: str) -> tuple[int, float]:
+    """Sort key for an ion-named APFU column: decreasing charge, then
+    increasing ionic radius.
+
+    Approximates the conventional order structural formulas are written in —
+    small, high-charge cations (tetrahedral, T) first, through octahedral
+    (M), to large, low-charge interlayer/interstitial (A/B/X) cations last.
+    Unrecognised ions sort last within their charge group.
+    """
+    parsed = _parse_ion(col)
+    if parsed is None:
+        return (0, float("inf"))
+    element, charge = parsed
+    return (-charge, _ION_RADIUS.get((element, charge), float("inf")))
+
+
+def sort_apfu_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Reorder ion-named columns by decreasing charge, then increasing
+    ionic radius (see `_apfu_sort_key`).
+
+    Args:
+        df: DataFrame with ion-named columns (e.g. ``"Si{4+}"``).
+
+    Returns:
+        Same DataFrame, with columns reordered.
+    """
+    return df[sorted(df.columns, key=_apfu_sort_key)]
 
 
 # ---------------------------------------------------------------------------
@@ -710,8 +772,8 @@ VALENCE_PAIRS: dict[str, dict[str, object]] = {
 def _droop_apfu(
     apfu_sum: pd.Series,
     total_apfu: pd.Series,
-    n_oxygens: int | float,
-    ideal_cations: int | float,
+    n_oxygens: float,
+    ideal_cations: float,
 ) -> pd.Series:
     """Estimate the higher-charge species APFU using Droop (1987).
 
@@ -734,8 +796,8 @@ def _droop_apfu(
 def _schumacher_apfu(
     apfu: pd.DataFrame,
     element: str,
-    n_oxygens: int | float,
-    ideal_cations: int | float,
+    n_oxygens: float,
+    ideal_cations: float,
 ) -> pd.Series:
     """Estimate the higher-charge species APFU using Schumacher (1991).
 
@@ -784,8 +846,8 @@ def split_valence(
     apfu: pd.DataFrame,
     element: str,
     method: str,
-    n_oxygens: int | float,
-    ideal_cations: int | float,
+    n_oxygens: float,
+    ideal_cations: float,
 ) -> pd.DataFrame:
     """Split a total-element column into low/high charge APFU.
 
@@ -1047,6 +1109,248 @@ def apatite_correction(df: pd.DataFrame) -> pd.DataFrame:
 
     work["P2O5"] = 0.0
     return work
+
+
+# ---------------------------------------------------------------------------
+# Mineral fractionation — spherical-shell profile integration + mass balance
+# ---------------------------------------------------------------------------
+
+
+def _pchip_slopes(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Fritsch & Carlson (1980) monotone-cubic tangents for PCHIP.
+
+    Args:
+        x: Strictly increasing sample positions, shape ``(n,)``.
+        y: Sample values, shape ``(n, k)`` — one column per variable.
+
+    Returns:
+        Tangent (derivative) estimates, shape ``(n, k)``, matching the
+        algorithm behind `scipy.interpolate.PchipInterpolator`.
+    """
+    n = len(x)
+    h = np.diff(x)[:, None]
+    d = np.diff(y, axis=0) / h
+    m = np.zeros_like(y, dtype=float)
+
+    if n == 2:
+        m[:] = d[0]
+        return m
+
+    d0, d1 = d[:-1], d[1:]
+    h0, h1 = h[:-1], h[1:]
+    same_sign = (d0 > 0) == (d1 > 0)
+    nonzero = (d0 != 0) & (d1 != 0)
+    w1 = 2.0 * h1 + h0
+    w2 = h1 + 2.0 * h0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        interior = (w1 + w2) / (w1 / d0 + w2 / d1)
+    m[1:-1] = np.where(same_sign & nonzero, interior, 0.0)
+
+    m[0] = _pchip_end_slope(h[0], h[1], d[0], d[1])
+    m[-1] = _pchip_end_slope(h[-1], h[-2], d[-1], d[-2])
+    return m
+
+
+def _pchip_end_slope(
+    h0: np.ndarray, h1: np.ndarray, d0: np.ndarray, d1: np.ndarray
+) -> np.ndarray:
+    """One-sided three-point endpoint tangent with monotonicity correction."""
+    m = ((2.0 * h0 + h1) * d0 - h0 * d1) / (h0 + h1)
+    wrong_sign = (m > 0) != (d0 > 0)
+    m = np.where(wrong_sign, 0.0, m)
+    overshoot = ((d0 > 0) != (d1 > 0)) & (np.abs(m) > np.abs(3.0 * d0))
+    return np.where(overshoot, 3.0 * d0, m)
+
+
+def _pchip_eval(
+    x: np.ndarray, y: np.ndarray, m: np.ndarray, xi: np.ndarray
+) -> np.ndarray:
+    """Evaluate the PCHIP cubic Hermite interpolant at *xi*."""
+    idx = np.clip(np.searchsorted(x, xi, side="right") - 1, 0, len(x) - 2)
+    h = (x[idx + 1] - x[idx])[:, None]
+    t = ((xi - x[idx]) / h[:, 0])[:, None]
+    t2 = t * t
+    t3 = t2 * t
+    h00 = 2.0 * t3 - 3.0 * t2 + 1.0
+    h10 = t3 - 2.0 * t2 + t
+    h01 = -2.0 * t3 + 3.0 * t2
+    h11 = t3 - t2
+    return h00 * y[idx] + h10 * h * m[idx] + h01 * y[idx + 1] + h11 * h * m[idx + 1]
+
+
+def _resample_profile(
+    x: np.ndarray, y: pd.DataFrame, n_grid: int
+) -> tuple[np.ndarray, pd.DataFrame]:
+    """PCHIP-resample *y* onto `n_grid` evenly spaced points over [0, 1].
+
+    Args:
+        x: Position values for each row of *y*, already ordered core (first)
+            to rim (last). Only relative ordering/spacing matters — absolute
+            units cancel out once normalised to [0, 1].
+        y: DataFrame of values to resample (one column per oxide).
+        n_grid: Number of evenly spaced grid points.
+
+    Returns:
+        ``(xi, resampled)`` — the ``[0, 1]`` grid and a DataFrame of
+        resampled values with the same columns as *y*.
+    """
+    x = np.asarray(x, dtype=float)
+    x_norm = (x - x[0]) / (x[-1] - x[0])
+    xi = np.linspace(0.0, 1.0, n_grid)
+    y_arr = y.to_numpy(dtype=float)
+    m = _pchip_slopes(x_norm, y_arr)
+    resampled = _pchip_eval(x_norm, y_arr, m, xi)
+    return xi, pd.DataFrame(resampled, columns=y.columns)
+
+
+def _integrate_spherical_shells(xi: np.ndarray, resampled: pd.DataFrame) -> pd.Series:
+    """Volume-weighted (spherical-shell) trapezoidal integration.
+
+    Args:
+        xi: Evenly spaced radial positions in ``[0, 1]``, core (0) to rim (1).
+        resampled: Values at each `xi`, one column per oxide.
+
+    Returns:
+        Series of volume-integrated values, one per column of *resampled*.
+    """
+    r3 = xi**3
+    r3_diff = np.diff(r3)
+    r3_total = r3[-1] - r3[0]
+    values = resampled.to_numpy()
+    midpoints = (values[:-1] + values[1:]) / 2.0
+    weighted = (midpoints * r3_diff[:, None]).sum(axis=0) / r3_total
+    return pd.Series(weighted, index=resampled.columns)
+
+
+def _positions_from_index(segment: pd.DataFrame) -> np.ndarray:
+    """Monotonically increasing relative position from a segment's index.
+
+    Built from the cumulative *absolute* spacing between consecutive rows
+    in the segment's current row order, rather than the raw index values
+    directly — this stays correct even when the segment's rows have been
+    reordered (e.g. reversed to turn a rim-to-core traverse into
+    core-to-rim), which leaves each row's original index label attached to
+    it and would otherwise make the index descend within the reordered
+    segment.
+    """
+    raw = segment.index.to_numpy(dtype=float)
+    steps = np.abs(np.diff(raw))
+    return np.concatenate(([0.0], np.cumsum(steps)))
+
+
+_PROFILE_ORDERS = {"core-to-rim", "rim-to-core", "rim-core-rim"}
+
+
+def integrate_radial_profile(
+    profile: pd.DataFrame, *, order: str = "core-to-rim", n_grid: int = 200
+) -> pd.Series:
+    """Volume-weighted average composition across a spherical grain profile.
+
+    Interpolates a (possibly unevenly stepped) radial EPMA profile onto an
+    evenly spaced grid with a monotone cubic (PCHIP) spline, then integrates
+    across concentric spherical shells (volume ∝ r³) to get the single
+    composition equivalent to the whole grain.
+
+    Args:
+        profile: DataFrame of oxide wt% analyses along one radial traverse,
+            indexed by relative position along the traverse (any monotonic
+            numeric coordinate — actual distance, point number, whatever the
+            index represents; only relative ordering/spacing matters).
+        order: Orientation of *profile*'s rows — ``"core-to-rim"`` (first row
+            is the core), ``"rim-to-core"`` (first row is the rim, reversed
+            before integrating), or ``"rim-core-rim"`` (a full traverse
+            through the grain; split at the midpoint row into two
+            core-to-rim halves, each integrated independently, then
+            averaged).
+        n_grid: Number of evenly spaced grid points used for the spline
+            resampling before integration.
+
+    Returns:
+        Series of volume-integrated oxide wt% values (one per oxide column
+        in *profile*), representing the single volume-averaged composition
+        of the whole grain.
+
+    Raises:
+        ValueError: If *order* is not one of the supported values.
+    """
+    if order not in _PROFILE_ORDERS:
+        msg = f"order must be one of {sorted(_PROFILE_ORDERS)}, got {order!r}"
+        raise ValueError(msg)
+
+    cols = _oxide_cols(profile)
+
+    def _core_to_rim(segment: pd.DataFrame) -> pd.Series:
+        x = _positions_from_index(segment)
+        xi, resampled = _resample_profile(x, segment[cols], n_grid)
+        return _integrate_spherical_shells(xi, resampled)
+
+    if order == "core-to-rim":
+        return _core_to_rim(profile)
+    if order == "rim-to-core":
+        return _core_to_rim(profile.iloc[::-1])
+
+    # rim-core-rim: split at the midpoint into two core-to-rim halves
+    mid = len(profile) // 2
+    first = profile.iloc[: mid + 1].iloc[::-1]
+    second = profile.iloc[mid:]
+    return (_core_to_rim(first) + _core_to_rim(second)) / 2.0
+
+
+def fractionate(
+    bulk: pd.DataFrame,
+    mineral_wt: pd.Series,
+    fraction: pd.Series,
+    *,
+    ideal_cations: float | None = None,
+) -> pd.DataFrame:
+    """Subtract a molar fraction of a mineral composition from a bulk composition.
+
+    Both *bulk* and *mineral_wt* are converted to moles of cations per oxide
+    (`cation_moles`), which puts every oxide component on a single-cation
+    basis (e.g. Al₂O₃ counts as 2 mol of cation-equivalent) — this makes
+    *ideal_cations* (a mineral's total cations per formula unit) an exact,
+    dimensionally consistent scaling factor.
+
+    Args:
+        bulk: Bulk-rock oxide wt%, one or more rows.
+        mineral_wt: A single integrated mineral composition, oxide wt%
+            (e.g. from `integrate_radial_profile`).
+        fraction: Molar fraction of mineral to remove from each row of
+            *bulk*. Interpreted directly as an oxide-mole (cation-mole)
+            fraction when *ideal_cations* is None; otherwise interpreted as
+            a fraction of mineral formula units, scaled via *ideal_cations*
+            to the same cation-mole basis (`ideal_cations * fraction / N_bulk`).
+        ideal_cations: The mineral's cations per formula unit (e.g.
+            `Grt.ideal_cations`). None (default) treats *fraction* as a
+            plain system-oxide (cation-mole) fraction with no scaling.
+
+    Returns:
+        New bulk-rock oxide wt% DataFrame, same index/columns as *bulk*,
+        each row renormalised to that row's original oxide total.
+    """
+    cols = _oxide_cols(bulk)
+    bulk_total = bulk[cols].sum(axis=1)
+
+    mineral_row = mineral_wt.reindex(cols, fill_value=0.0).to_frame().T
+
+    n_bulk = cation_moles(bulk[cols])
+    n_gnt = cation_moles(mineral_row).iloc[0]
+
+    n_bulk_total = n_bulk.sum(axis=1)
+    n_gnt_total = n_gnt.sum()
+
+    x_bulk = n_bulk.div(n_bulk_total, axis=0)
+    x_gnt = n_gnt / n_gnt_total
+
+    f = fraction if ideal_cations is None else ideal_cations * fraction / n_bulk_total
+
+    gnt_contribution = pd.DataFrame({c: f * x_gnt[c] for c in cols}, index=x_bulk.index)
+    x_eff = (x_bulk - gnt_contribution).div(1.0 - f, axis=0).clip(lower=0.0)
+
+    cations_per = pd.Series({c: _cations_per(c) for c in cols}, dtype=float)
+    mass_eff = x_eff.div(cations_per).mul(molecular_weights(cols))
+
+    return normalize(mass_eff, to=bulk_total)
 
 
 # ---------------------------------------------------------------------------
@@ -1380,16 +1684,15 @@ def _cipw_norm_row(
     y["mgr"] = mg / (fe2 + mg)
     y["femg"] = fe2 + mg
 
-    if spinel and si < 45:
-        if y["femg"] <= y["C"]:
-            y["MgSp"] = y["mgr"] * y["femg"]
-            y["FeSp"] = y["fer"] * y["femg"]
-            y["C"] = y["C"] - y["MgSp"] - y["FeSp"]
+    if spinel and si < 45 and y["femg"] <= y["C"]:
+        y["MgSp"] = y["mgr"] * y["femg"]
+        y["FeSp"] = y["fer"] * y["femg"]
+        y["C"] = y["C"] - y["MgSp"] - y["FeSp"]
 
-            y["MgSp"] = y["mgr"] * y["C"]
-            y["FeSp"] = y["fer"] * y["C"]
-            y["C"] = 0
-            y["femg"] = y["femg"] - y["MgSp"] - y["FeSp"]
+        y["MgSp"] = y["mgr"] * y["C"]
+        y["FeSp"] = y["fer"] * y["C"]
+        y["C"] = 0
+        y["femg"] = y["femg"] - y["MgSp"] - y["FeSp"]
 
     if ca >= y["femg"]:
         y["Di"] = y["femg"]
@@ -1570,16 +1873,15 @@ def _cipwhb_norm_row(
     y["mgr"] = mg / (fe2 + mg)
     y["femg"] = fe2 + mg
 
-    if spinel and si < 45:
-        if y["femg"] <= y["C"]:
-            y["MgSp"] = y["mgr"] * y["femg"]
-            y["FeSp"] = y["fer"] * y["femg"]
-            y["C"] = y["C"] - y["MgSp"] - y["FeSp"]
+    if spinel and si < 45 and y["femg"] <= y["C"]:
+        y["MgSp"] = y["mgr"] * y["femg"]
+        y["FeSp"] = y["fer"] * y["femg"]
+        y["C"] = y["C"] - y["MgSp"] - y["FeSp"]
 
-            y["MgSp"] = y["mgr"] * y["C"]
-            y["FeSp"] = y["fer"] * y["C"]
-            y["C"] = 0
-            y["femg"] = y["femg"] - y["MgSp"] - y["FeSp"]
+        y["MgSp"] = y["mgr"] * y["C"]
+        y["FeSp"] = y["fer"] * y["C"]
+        y["C"] = 0
+        y["femg"] = y["femg"] - y["MgSp"] - y["FeSp"]
 
     if al >= ca:
         y["An"] = ca
@@ -1752,7 +2054,7 @@ def _run_cipw_norm(
     for name, mole_row in moles.iterrows():
         try:
             rows[name] = row_fn(mole_row.to_dict(), normsum, cancrinite, spinel)
-        except Exception:
+        except Exception:  # noqa: BLE001 — skip unreadable rows, keep processing the rest
             rows[name] = {col: float("nan") for col in result_names}
 
     results = pd.DataFrame.from_dict(rows, orient="index")[result_names]

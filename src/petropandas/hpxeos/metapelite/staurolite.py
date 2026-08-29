@@ -23,6 +23,8 @@ formula here, since xAlY is simply whatever isn't Fe3+, Ti, or vacant.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import Phase
@@ -65,19 +67,19 @@ xvY        1 1    0  1  1/3  t
 
 class Staurolite(Phase):
     abbreviation = "st"
-    sites = {
+    sites: ClassVar = {
         "X": ["Mg{2+}", "Fe{2+}", "Mn{2+}"],
         "Y": ["Al{3+}", "Fe{3+}", "Ti{4+}"],
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["mstm", "fst", "mnstm", "msto", "mstt"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = ["mstm", "fst", "mnstm", "msto", "mstt"]
 
     # -- petropandas Mineral metadata (from old TC_st) --
     n_oxygens = 48
     ideal_cations = 6
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "X", "capacity": 4.0, "priority": ["Mg{2+}", "Fe{2+}", "Mn{2+}"]},
         {"name": "Y", "capacity": 2.0, "priority": ["Al{3+}", "Fe{3+}", "Ti{4+}"]},
     ]

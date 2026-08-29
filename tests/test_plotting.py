@@ -5,8 +5,15 @@ import pytest
 from matplotlib.backend_bases import ResizeEvent
 from matplotlib.colors import to_rgba
 
-from petropandas._plotting import ProfilePlot, ScatterPlot, TernaryPlot
-from petropandas._plotting import _axis_ticks, _polygon_vertices, _project, _variance
+from petropandas._plotting import (
+    ProfilePlot,
+    ScatterPlot,
+    TernaryPlot,
+    _axis_ticks,
+    _polygon_vertices,
+    _project,
+    _variance,
+)
 
 # --- ScatterPlot ---
 
@@ -375,7 +382,7 @@ def test_profile_uses_constrained_layout(profile_rendered):
 
 
 def test_profile_one_line_per_column_across_groups(profile_rendered):
-    fig, ax = profile_rendered
+    _fig, ax = profile_rendered
     assert len(ax.lines) == 6
 
 
@@ -438,7 +445,7 @@ def test_profile_secondary_ylabel_only_set_with_secondary_axes(profile_groups):
     p1, _ = profile_groups
     s = ProfilePlot(secondary_columns=["MnO"], secondary_ylabel="Mn (wt%)")
     s.add(p1, label="Profile 1")
-    fig, ax = s.render()
+    fig, _ax = s.render()
     try:
         assert fig.axes[1].get_ylabel() == "Mn (wt%)"
     finally:
@@ -513,7 +520,7 @@ def test_profile_auto_split_groups_by_value_scale():
     )
     s = ProfilePlot(split="auto")
     s.add(data, label="Data")
-    fig, ax = s.render()
+    fig, _ax = s.render()
     try:
         secondary = s._secondary_axis_columns
         assert secondary in ({"small_a", "small_b"}, {"large_a", "large_b"})
@@ -641,7 +648,7 @@ def test_profile_split_gap_not_compressed_when_ranges_overlap():
     s.add(data, label="Data")
     fig, ax = s.render()
     try:
-        primary_min, primary_max = sorted(ax.dataLim.intervaly)
+        _primary_min, primary_max = sorted(ax.dataLim.intervaly)
         ylim = ax.get_ylim()
         top_frac = (primary_max - ylim[0]) / (ylim[1] - ylim[0])
         assert top_frac > 0.9
@@ -759,10 +766,10 @@ def test_polygon_vertices_extreme_tlim_not_degenerate():
 
 def test_axis_ticks_match_verified_positions():
     poly = _polygon_vertices(None, None, None, 100.0)
-    ticks = dict(
-        (value, (round(x, 3), round(y, 3)))
+    ticks = {
+        value: (round(x, 3), round(y, 3))
         for (x, y), value, _normal in _axis_ticks(poly, 0, 0, 100)
-    )
+    }
     assert ticks[0.0] == (0.577, 0.0)
     assert ticks[20.0] == (0.462, 0.2)
     assert ticks[100.0] == (0.0, 1.0)

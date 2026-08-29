@@ -5,6 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from petropandas.hpxeos.igneous import TC_g_W24
+from petropandas.hpxeos.metabasite import TC_aug, TC_dio, TC_hb, TC_ol
 from petropandas.hpxeos.metapelite import (
     TC_bi,
     TC_cd,
@@ -22,8 +24,6 @@ from petropandas.hpxeos.metapelite import (
     TC_sp,
     TC_st,
 )
-from petropandas.hpxeos.metabasite import TC_aug, TC_dio, TC_ol, TC_hb
-from petropandas.hpxeos.igneous import TC_g_W24
 
 
 def _sums_to_100(result: pd.DataFrame, tol: float = 0.01) -> None:

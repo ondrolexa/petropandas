@@ -37,6 +37,8 @@ both are optional caller-supplied inputs defaulting to 0.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from ..base import OrderParameters, Phase, resolve_order_parameters
@@ -119,21 +121,30 @@ xAlT2      1 1    0  2  1/2  Qal  1/2  y
 
 class Augite(Phase):
     abbreviation = "aug"
-    sites = {
+    sites: ClassVar = {
         "M1": ["Mg{2+}", "Fe{2+}", "Al{3+}", "Fe{3+}"],
         "M2": ["Mg{2+}", "Fe{2+}", "Ca{2+}", "Na{+}"],
         "T": ["Si{4+}", "Al{3+}"],  # combined T1+T2 for mass balance / validation
     }
-    optional_columns = {"Fe{3+}"}
-    end_member_names = ["di", "cenh", "cfs", "jdm", "acmm", "ocats", "dcats", "fmc"]
+    optional_columns: ClassVar = {"Fe{3+}"}
+    end_member_names: ClassVar = [
+        "di",
+        "cenh",
+        "cfs",
+        "jdm",
+        "acmm",
+        "ocats",
+        "dcats",
+        "fmc",
+    ]
     order_parameter_names = ("Qfm", "Qal")
 
     # -- petropandas Mineral metadata (NEW: split from old monolithic TC_dio) --
     n_oxygens = 6
     ideal_cations = 4
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 2.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M1",

@@ -21,7 +21,7 @@ from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from functools import cached_property
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import pandas as pd
 import requests
@@ -353,7 +353,7 @@ class PetroDB:
     ):
         self._db = _PetroAPI(api_url, username, password, timeout, read_only=read_only)
 
-    def __enter__(self) -> PetroDB:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args: object) -> None:

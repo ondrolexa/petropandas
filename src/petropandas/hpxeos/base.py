@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -67,7 +68,7 @@ class Phase(Mineral, ABC):
     #: cation columns that need not be present in `composition` (e.g. an oxidation
     #: state not analyzed); absent values are treated as the site model requires,
     #: typically zero.
-    optional_columns: set[str] = set()
+    optional_columns: ClassVar[set[str]] = set()
 
     def site_totals(self, composition: pd.DataFrame) -> pd.DataFrame:
         """Sum of cations assigned to each site, per analysis."""

@@ -8,7 +8,6 @@ import pytest
 
 import petropandas  # noqa: F401 — triggers accessor registration
 
-
 # ---------------------------------------------------------------------------
 # PetroAccessor — init + general tools
 # ---------------------------------------------------------------------------
@@ -85,29 +84,29 @@ class TestMolesAccessor:
         assert result["F"].iloc[0] == pytest.approx(0.5 / 19.0, abs=0.001)
 
 
-class TestMolesNormalized:
+class TestMolesNormalize:
     def test_sums_to_100(self, fe_pyroxene: pd.DataFrame) -> None:
-        result = fe_pyroxene.moles.normalized()
+        result = fe_pyroxene.moles.normalize()
         assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
 
     def test_sets_attrs(self, fe_pyroxene: pd.DataFrame) -> None:
-        result = fe_pyroxene.moles.normalized()
+        result = fe_pyroxene.moles.normalize()
         assert result.attrs.get("petro_units") == "moles"
 
     def test_from_wt(self, diopside: pd.DataFrame) -> None:
-        result = diopside.moles.normalized()
+        result = diopside.moles.normalize()
         moles = diopside.moles()
         expected = moles.div(moles.sum(axis=1), axis=0) * 100.0
         pd.testing.assert_frame_equal(result, expected, check_like=True)
 
     def test_from_moles_idempotent(self, fe_pyroxene: pd.DataFrame) -> None:
-        n1 = fe_pyroxene.moles.normalized()
-        n2 = n1.moles.normalized()
+        n1 = fe_pyroxene.moles.normalize()
+        n2 = n1.moles.normalize()
         pd.testing.assert_frame_equal(n1, n2)
 
     def test_retains_element_columns(self) -> None:
         df = pd.DataFrame({"SiO2": [55.0], "MgO": [18.0], "CaO": [25.0], "F": [0.5]})
-        result = df.moles.normalized()
+        result = df.moles.normalize()
         assert "F" in result.columns
         assert result["F"].iloc[0] > 0
         assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
@@ -186,13 +185,13 @@ class TestOxidesRoundtrip:
         assert result.attrs.get("petro_units") == "wt%"
 
 
-class TestOxidesNormalized:
+class TestOxidesNormalize:
     def test_sums_to_100(self, fe_pyroxene: pd.DataFrame) -> None:
-        result = fe_pyroxene.oxides.normalized()
+        result = fe_pyroxene.oxides.normalize()
         assert result.sum(axis=1).iloc[0] == pytest.approx(100.0)
 
     def test_preserves_units(self, fe_pyroxene: pd.DataFrame) -> None:
-        result = fe_pyroxene.oxides.normalized()
+        result = fe_pyroxene.oxides.normalize()
         assert result.attrs.get("petro_units") == "wt%"
 
 

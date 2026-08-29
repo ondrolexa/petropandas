@@ -8,40 +8,40 @@ exact Mn-free subset of) blocks already implemented there - those are reused dir
 rather than duplicated. See each name's source module for which case it is.
 """
 
-from .biotite import TC_bi_G25, Biotite
-from .clinopyroxene import TC_cpx_W24, Clinopyroxene
-from .cordierite import TC_cd_G25, Cordierite
-from .garnet import TC_g_W24, Garnet
-from .ilmenite import TC_ilm_W24, Ilmenite
-from .olivine import TC_ol_H18, Olivine
-from .orthopyroxene import TC_opx_W24, Orthopyroxene
-from .spinel import TC_spl_T21, Spinel
-from ..metabasite import TC_hb, Amphibole
-from ..metapelite import TC_ep, TC_mu, TC_pl4tr, Epidote, Muscovite, Plagioclase
+from ..metabasite import Amphibole, TC_hb
+from ..metapelite import Epidote, Muscovite, Plagioclase, TC_ep, TC_mu, TC_pl4tr
+from .biotite import Biotite, TC_bi_G25
+from .clinopyroxene import Clinopyroxene, TC_cpx_W24
+from .cordierite import Cordierite, TC_cd_G25
+from .garnet import Garnet, TC_g_W24
+from .ilmenite import Ilmenite, TC_ilm_W24
+from .olivine import Olivine, TC_ol_H18
+from .orthopyroxene import Orthopyroxene, TC_opx_W24
+from .spinel import Spinel, TC_spl_T21
 
 __all__ = [
-    "Epidote",
-    "Muscovite",
-    "Plagioclase",
     "Amphibole",
-    "Cordierite",
-    "Olivine",
-    "Ilmenite",
-    "Garnet",
     "Biotite",
-    "Spinel",
-    "Orthopyroxene",
     "Clinopyroxene",
-    "TC_ep",
-    "TC_mu",
-    "TC_pl4tr",
-    "TC_hb",
-    "TC_cd_G25",
-    "TC_ol_H18",
-    "TC_ilm_W24",
-    "TC_g_W24",
+    "Cordierite",
+    "Epidote",
+    "Garnet",
+    "Ilmenite",
+    "Muscovite",
+    "Olivine",
+    "Orthopyroxene",
+    "Plagioclase",
+    "Spinel",
     "TC_bi_G25",
-    "TC_spl_T21",
-    "TC_opx_W24",
+    "TC_cd_G25",
     "TC_cpx_W24",
+    "TC_ep",
+    "TC_g_W24",
+    "TC_hb",
+    "TC_ilm_W24",
+    "TC_mu",
+    "TC_ol_H18",
+    "TC_opx_W24",
+    "TC_pl4tr",
+    "TC_spl_T21",
 ]

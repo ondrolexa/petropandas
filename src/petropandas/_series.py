@@ -11,7 +11,7 @@ from petropandas._core import MW, _element_of, _is_oxide
 class MineralSeriesAccessor:
     """Per-column accessor for oxide Series (``series.mineral``)."""
 
-    def __init__(self, obj: pd.Series) -> None:  # noqa: UP007
+    def __init__(self, obj: pd.Series) -> None:
         self._obj = obj
 
     @property
@@ -24,7 +24,7 @@ class MineralSeriesAccessor:
         """Element symbol for this oxide, or None if not recognised."""
         try:
             return _element_of(str(self._obj.name))
-        except Exception:
+        except Exception:  # noqa: BLE001 — see `_core._safe_formula`
             return None
 
     @property
@@ -32,16 +32,14 @@ class MineralSeriesAccessor:
         """Molecular weight from periodictable, or None if not recognised."""
         try:
             return MW(str(self._obj.name))
-        except Exception:
+        except Exception:  # noqa: BLE001 — see `_core._safe_formula`
             return None
 
     def to_mole(self) -> pd.Series:
         """Convert oxide wt% to moles."""
         return self._obj / MW(str(self._obj.name))
 
-    def to_cation(
-        self, n_oxygens: int | float, total_oxygens: int | float
-    ) -> pd.Series:
+    def to_cation(self, n_oxygens: float, total_oxygens: float) -> pd.Series:
         """Convert oxide wt% to APFU for this column.
 
         Args:

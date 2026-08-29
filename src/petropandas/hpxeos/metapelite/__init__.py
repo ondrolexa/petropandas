@@ -1,57 +1,57 @@
 from ..base import Phase
-from .biotite import TC_bi, Biotite
-from .chlorite import TC_chl, Chlorite
-from .chloritoid import TC_ctd, Chloritoid
-from .cordierite import TC_cd, Cordierite
-from .epidote import TC_ep, Epidote
-from .garnet import TC_g, Garnet
-from .ilmenite import TC_ilm, Ilmenite
-from .ilmenite_mixed import TC_ilmm, IlmeniteMixed
-from .kfeldspar import TC_k4tr, KFeldspar
-from .kfeldspar_cbar1 import TC_ksp, KFeldsparCbar1
-from .magnetite import TC_mt1, Magnetite
-from .margarite import TC_ma, Margarite
-from .muscovite import TC_mu, Muscovite
-from .orthopyroxene import TC_opx, Orthopyroxene
-from .plagioclase import TC_pl4tr, Plagioclase
-from .plagioclase_cbar1 import TC_plc, PlagioclaseCbar1
-from .sapphirine import TC_sa, Sapphirine
-from .spinel import TC_sp, Spinel
-from .staurolite import TC_st, Staurolite
+from .biotite import Biotite, TC_bi
+from .chlorite import Chlorite, TC_chl
+from .chloritoid import Chloritoid, TC_ctd
+from .cordierite import Cordierite, TC_cd
+from .epidote import Epidote, TC_ep
+from .garnet import Garnet, TC_g
+from .ilmenite import Ilmenite, TC_ilm
+from .ilmenite_mixed import IlmeniteMixed, TC_ilmm
+from .kfeldspar import KFeldspar, TC_k4tr
+from .kfeldspar_cbar1 import KFeldsparCbar1, TC_ksp
+from .magnetite import Magnetite, TC_mt1
+from .margarite import Margarite, TC_ma
+from .muscovite import Muscovite, TC_mu
+from .orthopyroxene import Orthopyroxene, TC_opx
+from .plagioclase import Plagioclase, TC_pl4tr
+from .plagioclase_cbar1 import PlagioclaseCbar1, TC_plc
+from .sapphirine import Sapphirine, TC_sa
+from .spinel import Spinel, TC_sp
+from .staurolite import Staurolite, TC_st
 
 __all__ = [
-    "Phase",
-    "Garnet",
-    "Ilmenite",
-    "IlmeniteMixed",
     "Biotite",
     "Chlorite",
     "Chloritoid",
     "Cordierite",
     "Epidote",
-    "Muscovite",
-    "Margarite",
+    "Garnet",
+    "Ilmenite",
+    "IlmeniteMixed",
     "KFeldspar",
     "KFeldsparCbar1",
+    "Magnetite",
+    "Margarite",
+    "Muscovite",
+    "Orthopyroxene",
+    "Phase",
     "Plagioclase",
     "PlagioclaseCbar1",
-    "Orthopyroxene",
     "Sapphirine",
     "Spinel",
     "Staurolite",
-    "Magnetite",
     "TC_bi",
+    "TC_cd",
     "TC_chl",
     "TC_ctd",
-    "TC_cd",
     "TC_ep",
     "TC_g",
     "TC_ilm",
     "TC_ilmm",
     "TC_k4tr",
     "TC_ksp",
-    "TC_mt1",
     "TC_ma",
+    "TC_mt1",
     "TC_mu",
     "TC_opx",
     "TC_pl4tr",

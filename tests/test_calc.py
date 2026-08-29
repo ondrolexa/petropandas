@@ -16,6 +16,7 @@ from petropandas._calc import (
     oxidize_moles,
     oxygen_moles,
     reduce_moles,
+    sort_apfu_columns,
     split_valence,
     to_apfu,
     to_moles,
@@ -510,3 +511,44 @@ class TestFromApfu:
         apfu = convert(diopside, "apfu", n_oxygens=6)
         with pytest.raises(ValueError, match="Specify exactly one"):
             convert(apfu, "wt%", from_unit="apfu", n_oxygens=6, n_cations=4)
+
+
+class TestSortApfuColumns:
+    def test_charge_then_radius_order(self) -> None:
+        df = pd.DataFrame(
+            {
+                "Na{+}": [0.1],
+                "Ca{2+}": [0.2],
+                "Mg{2+}": [0.3],
+                "Al{3+}": [0.4],
+                "Si{4+}": [0.5],
+                "K{+}": [0.6],
+                "Fe{2+}": [0.7],
+            }
+        )
+        result = sort_apfu_columns(df)
+        assert list(result.columns) == [
+            "Si{4+}",
+            "Al{3+}",
+            "Mg{2+}",
+            "Fe{2+}",
+            "Ca{2+}",
+            "Na{+}",
+            "K{+}",
+        ]
+
+    def test_values_unchanged(self) -> None:
+        df = pd.DataFrame({"Ca{2+}": [1.0, 2.0], "Si{4+}": [3.0, 4.0]})
+        result = sort_apfu_columns(df)
+        assert result["Ca{2+}"].tolist() == [1.0, 2.0]
+        assert result["Si{4+}"].tolist() == [3.0, 4.0]
+
+    def test_unrecognised_ion_sorts_last_in_charge_group(self) -> None:
+        df = pd.DataFrame({"Y{3+}": [0.1], "Al{3+}": [0.2], "Ca{2+}": [0.3]})
+        result = sort_apfu_columns(df)
+        assert list(result.columns) == ["Al{3+}", "Y{3+}", "Ca{2+}"]
+
+    def test_non_ion_column_does_not_raise(self) -> None:
+        df = pd.DataFrame({"Si{4+}": [0.1], "Label": ["p-01"]})
+        result = sort_apfu_columns(df)
+        assert set(result.columns) == {"Si{4+}", "Label"}

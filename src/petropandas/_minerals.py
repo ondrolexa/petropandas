@@ -14,12 +14,13 @@ occupancy rules, valence-splitting method, and end-member algorithm.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import numpy as np
 import pandas as pd
 
-import petropandas._calc as _calc
+from petropandas import _calc
 from petropandas._calc import _score_trapezoidal  # noqa: F401  (re-exported)
-
 
 # ---------------------------------------------------------------------------
 # Base class
@@ -37,8 +38,8 @@ class Mineral:
     name: str = "Unknown"
     n_oxygens: int | float = 0
     ideal_cations: int | float | None = None
-    valence_splits: list[dict] = []
-    site_definitions: list[dict] = []
+    valence_splits: ClassVar[list[dict]] = []
+    site_definitions: ClassVar[list[dict]] = []
     analytical_total_range: tuple[float, float] = (98.5, 101.5)
 
     #: Keyword arguments accepted by ``Mineral(**kwargs)`` — kept in sync
@@ -118,13 +119,16 @@ class Mineral:
             units: Current units (``"wt%"`` or ``"moles"``).
 
         Returns:
-            DataFrame with ion-named columns (e.g. ``"Si{4+}"``, ``"Fe{2+}"``).
+            DataFrame with ion-named columns (e.g. ``"Si{4+}"``, ``"Fe{2+}"``),
+            ordered by decreasing charge then increasing ionic radius (T-site
+            cations first, through M-site, to large A/B/X-site cations last).
         """
         sf = self.site_allocations(df, units)
         cation_cols = [c for c in sf.columns if c[1] != "_unallocated"]
         if not cation_cols:
             return pd.DataFrame(index=sf.index)
-        return sf[cation_cols].T.groupby(level=1).sum().T
+        result = sf[cation_cols].T.groupby(level=1).sum().T
+        return _calc.sort_apfu_columns(result)
 
     def site_allocations(self, df: pd.DataFrame, units: str = "wt%") -> pd.DataFrame:
         """Compute site allocations with hierarchical (site, cation) columns.
@@ -233,8 +237,8 @@ class Garnet(Mineral):
     n_oxygens = 12
     ideal_cations = 8
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "Z", "capacity": 3.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "Y",
@@ -320,7 +324,7 @@ class GarnetFe3(Garnet):
     name = "GarnetFe3"
 
     # Ideal moles of each cation per formula unit (7 × 6 matrix).
-    _ENDMEMBER_NAMES = ["Prp", "Alm", "Sps", "Grs", "Adr", "Uvr"]
+    _ENDMEMBER_NAMES: ClassVar = ["Prp", "Alm", "Sps", "Grs", "Adr", "Uvr"]
     _IDEAL_MATRIX = np.array(
         [
             # Ca  Mg  Fe   Cr  Mn  Al  Si
@@ -395,8 +399,8 @@ class Feldspar(Mineral):
     n_oxygens = 8
     ideal_cations = 5
     analytical_total_range = (99.0, 101.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 4.0, "priority": ["Si{4+}", "Al{3+}"]},
         {"name": "M", "capacity": 1.0, "priority": ["Ca{2+}", "Na{+}", "K{+}"]},
     ]
@@ -440,8 +444,8 @@ class Clinopyroxene(Mineral):
     n_oxygens = 6
     ideal_cations = 4
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 2.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M1",
@@ -538,8 +542,8 @@ class Orthopyroxene(Mineral):
     n_oxygens = 6
     ideal_cations = 4
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 2.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M1",
@@ -631,8 +635,8 @@ class Muscovite(Mineral):
     n_oxygens = 11
     ideal_cations = 7.0
     analytical_total_range = (94.0, 97.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 4.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "I",
@@ -730,8 +734,8 @@ class Biotite(Mineral):
     n_oxygens = 11
     ideal_cations = 7.0
     analytical_total_range = (94.0, 97.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 4.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "I",
@@ -813,8 +817,8 @@ class Staurolite(Mineral):
     n_oxygens = 48
     ideal_cations = None
     analytical_total_range = (99.0, 101.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 8.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M",
@@ -873,8 +877,8 @@ class Chlorite(Mineral):
     n_oxygens = 14
     ideal_cations = None
     analytical_total_range = (85.0, 90.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 4.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M",
@@ -943,8 +947,8 @@ class Epidote(Mineral):
     n_oxygens = 12.5
     ideal_cations = 8
     analytical_total_range = (99.0, 101.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {
             "name": "A",
             "capacity": 2.0,
@@ -1026,8 +1030,8 @@ class Amphibole(Mineral):
     n_oxygens = 23
     ideal_cations = 15
     analytical_total_range = (96.0, 99.0)
-    valence_splits = [{"element": "Fe", "method": "schumacher"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "schumacher"}]
+    site_definitions: ClassVar = [
         {"name": "A", "capacity": 1.0, "priority": ["K{+}", "Na{+}"]},
         {
             "name": "B",
@@ -1162,8 +1166,8 @@ class Titanite(Mineral):
     n_oxygens = 5
     ideal_cations = 3
     analytical_total_range = (99.0, 101.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {
             "name": "A",
             "capacity": 1.0,
@@ -1250,8 +1254,8 @@ class Chloritoid(Mineral):
     n_oxygens = 12
     ideal_cations = 8
     analytical_total_range = (99.0, 101.0)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {"name": "T", "capacity": 2.0, "priority": ["Si{4+}", "Al{3+}"]},
         {
             "name": "M1",
@@ -1311,8 +1315,8 @@ class Cordierite(Mineral):
     n_oxygens = 18
     ideal_cations = 11
     analytical_total_range = (97.0, 99.0)
-    valence_splits = []
-    site_definitions = [
+    valence_splits: ClassVar = []
+    site_definitions: ClassVar = [
         {"name": "T1", "capacity": 6.0, "priority": ["Si{4+}", "Al{3+}"]},
         {"name": "T2", "capacity": 3.0, "priority": ["Al{3+}", "Ti{4+}"]},
         {
@@ -1382,8 +1386,8 @@ class Ilmenite(Mineral):
     n_oxygens = 3
     ideal_cations = 2
     analytical_total_range = (93.0, 100.5)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {
             "name": "A",
             "capacity": 1.0,
@@ -1479,8 +1483,8 @@ class Spinel(Mineral):
     n_oxygens = 4
     ideal_cations = 3
     analytical_total_range = (93.0, 100.5)
-    valence_splits = [{"element": "Fe", "method": "droop"}]
-    site_definitions = [
+    valence_splits: ClassVar = [{"element": "Fe", "method": "droop"}]
+    site_definitions: ClassVar = [
         {
             "name": "T",
             "capacity": 1.0,
