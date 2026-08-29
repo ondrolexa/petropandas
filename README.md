@@ -1,5 +1,8 @@
 # petropandas
 
+[![Python testing](https://github.com/ondrolexa/petropandas/actions/workflows/testing.yml/badge.svg)](https://github.com/ondrolexa/petropandas/actions/workflows/testing.yml)
+[![codecov](https://codecov.io/gh/ondrolexa/petropandas/graph/badge.svg)](https://codecov.io/gh/ondrolexa/petropandas)
+
 A pandas-accessor library for processing electron microprobe (EMPA) mineral analyses — convert oxide wt% to APFU, compute structural formulas, estimate Fe³⁺/Fe²⁺, calculate end-members, validate stoichiometry, and produce publication-ready plots.
 
 ## Install
@@ -11,8 +14,12 @@ uv sync
 ### Optional dependencies
 
 ```bash
-uv sync --extra lab
+uv sync --extra lab    # Jupyter notebook workflows
+uv sync --extra tests  # running the test suite
+uv sync --extra docs   # building the documentation
 ```
+
+Contributors should instead run `uv sync --dev`, which installs all of the above plus `ruff` and `pre-commit`.
 
 ## Quick start
 

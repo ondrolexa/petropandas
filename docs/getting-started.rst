@@ -24,6 +24,9 @@ Optional Dependencies
    # For Jupyter notebook workflows
    uv add petropandas --optional lab
 
+   # For running the test suite
+   uv add petropandas --optional tests
+
    # For building this documentation
    uv add petropandas --optional docs
 

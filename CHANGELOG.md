@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.2] - 2026-08-29
 
 ### Added
 - mineral-fractionation mass balance for spherical grains
@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - `normalized()` renamed to `normalize(to=100.0)`, with a configurable target row sum
 - `mean()`'s `weights` argument now also accepts an array-like of numbers
+- added a `tests` optional-dependency group; `dev` now pulls in `lab`/`tests`/`docs` plus `ruff`/`pre-commit`
+- CI now measures test coverage and uploads it to Codecov; release workflow pins Python to 3.12
 
 ## [0.1.4] - 2026-07-13
 
