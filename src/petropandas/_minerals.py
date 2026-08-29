@@ -14,6 +14,7 @@ occupancy rules, valence-splitting method, and end-member algorithm.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import ClassVar
 
 import numpy as np
@@ -31,11 +32,13 @@ class Mineral:
     """Base class for mineral structural-formula calculations.
 
     Subclasses must set the following class attributes:
-    ``name``, ``n_oxygens``, ``ideal_cations``, ``valence_splits``,
-    ``site_definitions``, and ``analytical_total_range``.
+    ``name``, ``abbreviation``, ``n_oxygens``, ``ideal_cations``,
+    ``valence_splits``, ``site_definitions``, and
+    ``analytical_total_range``.
     """
 
     name: str = "Unknown"
+    abbreviation: str = ""
     n_oxygens: int | float = 0
     ideal_cations: int | float | None = None
     valence_splits: ClassVar[list[dict]] = []
@@ -48,6 +51,7 @@ class Mineral:
     _FIELDS = frozenset(
         {
             "name",
+            "abbreviation",
             "n_oxygens",
             "ideal_cations",
             "valence_splits",
@@ -63,6 +67,12 @@ class Mineral:
             raise TypeError(msg)
         for key, val in kwargs.items():
             setattr(self, key, val)
+
+    def __str__(self) -> str:
+        return self.abbreviation
+
+    def __repr__(self) -> str:
+        return self.name
 
     # -- public API ----------------------------------------------------------
 
@@ -234,6 +244,7 @@ class Garnet(Mineral):
     """
 
     name = "Garnet"
+    abbreviation = "Grt"
     n_oxygens = 12
     ideal_cations = 8
     analytical_total_range = (99.0, 101.0)
@@ -322,6 +333,7 @@ class GarnetFe3(Garnet):
     """
 
     name = "GarnetFe3"
+    abbreviation = "GrtFe3"
 
     # Ideal moles of each cation per formula unit (7 × 6 matrix).
     _ENDMEMBER_NAMES: ClassVar = ["Prp", "Alm", "Sps", "Grs", "Adr", "Uvr"]
@@ -396,6 +408,7 @@ class Feldspar(Mineral):
     """
 
     name = "Feldspar"
+    abbreviation = "Fsp"
     n_oxygens = 8
     ideal_cations = 5
     analytical_total_range = (99.0, 101.0)
@@ -441,6 +454,7 @@ class Clinopyroxene(Mineral):
     """
 
     name = "Clinopyroxene"
+    abbreviation = "Cpx"
     n_oxygens = 6
     ideal_cations = 4
     analytical_total_range = (99.0, 101.0)
@@ -539,6 +553,7 @@ class Orthopyroxene(Mineral):
     """
 
     name = "Orthopyroxene"
+    abbreviation = "Opx"
     n_oxygens = 6
     ideal_cations = 4
     analytical_total_range = (99.0, 101.0)
@@ -632,6 +647,7 @@ class Muscovite(Mineral):
     """
 
     name = "Muscovite"
+    abbreviation = "Ms"
     n_oxygens = 11
     ideal_cations = 7.0
     analytical_total_range = (94.0, 97.0)
@@ -731,6 +747,7 @@ class Biotite(Mineral):
     """
 
     name = "Biotite"
+    abbreviation = "Bt"
     n_oxygens = 11
     ideal_cations = 7.0
     analytical_total_range = (94.0, 97.0)
@@ -814,6 +831,7 @@ class Staurolite(Mineral):
     """
 
     name = "Staurolite"
+    abbreviation = "St"
     n_oxygens = 48
     ideal_cations = None
     analytical_total_range = (99.0, 101.0)
@@ -874,6 +892,7 @@ class Chlorite(Mineral):
     """
 
     name = "Chlorite"
+    abbreviation = "Chl"
     n_oxygens = 14
     ideal_cations = None
     analytical_total_range = (85.0, 90.0)
@@ -944,6 +963,7 @@ class Epidote(Mineral):
     """
 
     name = "Epidote"
+    abbreviation = "Ep"
     n_oxygens = 12.5
     ideal_cations = 8
     analytical_total_range = (99.0, 101.0)
@@ -1027,6 +1047,7 @@ class Amphibole(Mineral):
     """
 
     name = "Amphibole"
+    abbreviation = "Amp"
     n_oxygens = 23
     ideal_cations = 15
     analytical_total_range = (96.0, 99.0)
@@ -1163,6 +1184,7 @@ class Titanite(Mineral):
     """
 
     name = "Titanite"
+    abbreviation = "Ttn"
     n_oxygens = 5
     ideal_cations = 3
     analytical_total_range = (99.0, 101.0)
@@ -1251,6 +1273,7 @@ class Chloritoid(Mineral):
     """
 
     name = "Chloritoid"
+    abbreviation = "Cld"
     n_oxygens = 12
     ideal_cations = 8
     analytical_total_range = (99.0, 101.0)
@@ -1312,6 +1335,7 @@ class Cordierite(Mineral):
     """
 
     name = "Cordierite"
+    abbreviation = "Crd"
     n_oxygens = 18
     ideal_cations = 11
     analytical_total_range = (97.0, 99.0)
@@ -1383,6 +1407,7 @@ class Ilmenite(Mineral):
     """
 
     name = "Ilmenite"
+    abbreviation = "Ilm"
     n_oxygens = 3
     ideal_cations = 2
     analytical_total_range = (93.0, 100.5)
@@ -1480,6 +1505,7 @@ class Spinel(Mineral):
     """
 
     name = "Spinel"
+    abbreviation = "Spl"
     n_oxygens = 4
     ideal_cations = 3
     analytical_total_range = (93.0, 100.5)
@@ -1590,3 +1616,58 @@ class Spinel(Mineral):
 
 
 Spl = Spinel()
+
+
+# ---------------------------------------------------------------------------
+# Mineral registry
+# ---------------------------------------------------------------------------
+
+
+class MineralDatabase:
+    """Registry of the built-in ``Mineral`` instances, exposed as ``petropandas.mdb``.
+
+    Add new built-in minerals to the list passed to ``mdb`` below when they're
+    defined, alongside the existing ``__init__.py`` export and ``conftest.py``
+    fixture steps (see CLAUDE.md "Common pitfalls").
+    """
+
+    def __init__(self, minerals: Sequence[Mineral]) -> None:
+        self._minerals = tuple(minerals)
+        self._by_name = {m.name.casefold(): m for m in self._minerals}
+        self._by_abbreviation = {m.abbreviation.casefold(): m for m in self._minerals}
+
+    def all(self):
+        """Yield every registered ``Mineral`` instance."""
+        yield from self._minerals
+
+    def by_name(self, name: str) -> Mineral:
+        """Look up a mineral by its ``.name``, case-insensitively."""
+        try:
+            return self._by_name[name.casefold()]
+        except KeyError:
+            msg = f"Mineral with name {name!r} not found"
+            raise ValueError(msg) from None
+
+    def by_abbreviation(self, abbreviation: str) -> Mineral:
+        """Look up a mineral by its ``.abbreviation``, case-insensitively."""
+        try:
+            return self._by_abbreviation[abbreviation.casefold()]
+        except KeyError:
+            msg = f"Mineral with abbreviation {abbreviation!r} not found"
+            raise ValueError(msg) from None
+
+    @property
+    def names(self) -> list[str]:
+        return [m.name for m in self._minerals]
+
+    @property
+    def abbreviations(self) -> list[str]:
+        return [m.abbreviation for m in self._minerals]
+
+    def __repr__(self) -> str:
+        return f"Mineral database ({len(self._minerals)} minerals available)"
+
+
+mdb = MineralDatabase(
+    [Grt, GrtFe3, Fsp, Cpx, Opx, Ms, Bt, St, Chl, Ep, Amp, Ttn, Cld, Crd, Ilm, Spl]
+)

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-08-29
+
+### Added
+- `sum(*, groupby=None)` available on all accessors alongside `mean()`
+- `df.mineral.stoichiometry_quality(mineral)`: single 0–1 score, the mean of `check_stoichiometry()`'s `cation_deviation`, `site_vacancies`, and `leftover_cations`
+- `Mineral.__str__` returns `.abbreviation` and `Mineral.__repr__` returns `.name`; every built-in mineral now sets `.abbreviation` matching its instance name (e.g. `Grt.abbreviation == "Grt"`)
+- `mdb` mineral registry (`from petropandas import mdb`): `all()`, `by_name()`, `by_abbreviation()` (case-insensitive), and `names`/`abbreviations` properties over the 16 built-in minerals
+
 ## [0.2] - 2026-08-29
 
 ### Added

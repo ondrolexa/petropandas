@@ -92,6 +92,27 @@ using IMA-standard abbreviations.
 
 \* Chlorite uses 28-charge normalization (``n_oxygens=14`` effective).
 
+Mineral Registry
+----------------
+
+``mdb`` is a ready-made registry over the 16 built-in instances above (not the
+``hpxeos`` phases below):
+
+.. code-block:: python
+
+   from petropandas import mdb
+
+   list(mdb.all())
+   mdb.names
+   mdb.abbreviations
+   mdb.by_name("garnet")        # case-insensitive
+   mdb.by_abbreviation("GRT")   # case-insensitive
+
+.. autoclass:: petropandas._minerals.MineralDatabase
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 THERMOCALC a-x Models (``hpxeos``)
 -----------------------------------
 

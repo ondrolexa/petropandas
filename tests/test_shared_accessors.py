@@ -1,4 +1,4 @@
-"""Tests for `mean`/`reframe`/`normalize`/`select` shared via `_BaseAccessor`."""
+"""Tests for `mean`/`sum`/`reframe`/`normalize`/`select` shared via `_BaseAccessor`."""
 
 from __future__ import annotations
 
@@ -13,6 +13,9 @@ class TestOxidesMethodsNotRedefined:
     def test_mean_is_inherited(self) -> None:
         assert "mean" not in OxidesAccessor.__dict__
 
+    def test_sum_is_inherited(self) -> None:
+        assert "sum" not in OxidesAccessor.__dict__
+
     def test_select_is_inherited(self) -> None:
         assert "select" not in OxidesAccessor.__dict__
 
@@ -20,6 +23,9 @@ class TestOxidesMethodsNotRedefined:
 class TestMineralAccessorHasNoBaseAccessorMethods:
     def test_no_mean(self, garnet_multi: pd.DataFrame) -> None:
         assert not hasattr(garnet_multi.mineral, "mean")
+
+    def test_no_sum(self, garnet_multi: pd.DataFrame) -> None:
+        assert not hasattr(garnet_multi.mineral, "sum")
 
     def test_no_reframe(self, garnet_multi: pd.DataFrame) -> None:
         assert not hasattr(garnet_multi.mineral, "reframe")
@@ -52,6 +58,42 @@ class TestMeanAcrossUnits:
         moles = garnet_multi.moles()
         with pytest.raises(ValueError, match="not found"):
             moles.moles.mean(groupby="missing")
+
+
+class TestSumAcrossUnits:
+    def test_moles_sum_units(self, garnet_multi: pd.DataFrame) -> None:
+        moles = garnet_multi.moles()
+        result = moles.moles.sum()
+        assert result.attrs.get("petro_units") == "moles"
+
+    def test_moles_sum_matches_manual(self, garnet_multi: pd.DataFrame) -> None:
+        moles = garnet_multi.moles()
+        result = moles.moles.sum()
+        for col in moles.columns:
+            assert result[col].iloc[0] == pytest.approx(moles[col].sum())
+
+    def test_cations_sum_units(self, garnet_multi: pd.DataFrame) -> None:
+        apfu = garnet_multi.cations(n_oxygens=12)
+        result = apfu.cations.sum()
+        assert result.attrs.get("petro_units") == "apfu"
+
+    def test_groupby(self, garnet_multi: pd.DataFrame) -> None:
+        moles = garnet_multi.moles()
+        moles["grp"] = ["a"] * (len(moles) // 2) + ["b"] * (
+            len(moles) - len(moles) // 2
+        )
+        result = moles.moles.sum(groupby="grp")
+        assert list(result.index) == ["a", "b"]
+        cols = [c for c in moles.columns if c != "grp"]
+        for col in cols:
+            assert result.loc["a", col] == pytest.approx(
+                moles.loc[moles["grp"] == "a", col].sum()
+            )
+
+    def test_groupby_missing_column_raises(self, garnet_multi: pd.DataFrame) -> None:
+        moles = garnet_multi.moles()
+        with pytest.raises(ValueError, match="not found"):
+            moles.moles.sum(groupby="missing")
 
 
 class TestReframeAcrossUnits:

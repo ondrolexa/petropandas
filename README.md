@@ -21,6 +21,8 @@ uv sync --extra docs   # building the documentation
 
 Contributors should instead run `uv sync --dev`, which installs all of the above plus `ruff` and `pre-commit`.
 
+On Linux, `pandas`' clipboard I/O (`pandas.read_clipboard()` / `DataFrame.to_clipboard()`) needs a system-level clipboard utility — install `xclip` or `xsel` via your system package manager (e.g. `sudo apt install xclip`).
+
 ## Quick start
 
 ```python
@@ -96,6 +98,22 @@ Returns a DataFrame of 0–1 scores per criterion (1 = perfect fit).
 
 \* Chlorite uses 28-charge normalization (n_oxygens=14 effective).
 
+All 16 instances above are also registered in `mdb` (`from petropandas import mdb`), a
+small lookup registry:
+
+```python
+from petropandas import mdb
+
+list(mdb.all())  # every built-in Mineral instance
+mdb.names  # ["Garnet", "GarnetFe3", "Feldspar", ...]
+mdb.abbreviations  # ["Grt", "GrtFe3", "Fsp", ...]
+mdb.by_name("garnet")  # Grt (case-insensitive)
+mdb.by_abbreviation("GRT")  # Grt (case-insensitive)
+repr(mdb)  # "Mineral database (16 minerals available)"
+```
+
+`mdb` only covers these 16 built-ins, not the `hpxeos` a-x phases below.
+
 THERMOCALC activity-composition (a-x) solution models are available through the
 `petropandas.hpxeos` subpackage, covering three real THERMOCALC axfiles —
 `hpxeos.metapelite`, `hpxeos.metabasite`, `hpxeos.igneous` — each exposing ready-to-use
@@ -117,13 +135,14 @@ accept an optional `order_parameters` dict, passed through
 ## API reference
 
 `OxidesAccessor`, `MolesAccessor`, `CationsAccessor`, and `BulkAccessor` share a common
-base with three methods, all operating on the accessor's data in whatever
+base with methods, all operating on the accessor's data in whatever
 `petro_units` it's currently in (no forced conversion) and tagging the result with
 that same unit — `df.mineral` does **not** have these:
 
 | Method | Description |
 |--------|-------------|
 | `df.<accessor>.mean(*, groupby=None, weights=None)` | Mean across rows; `groupby` is a column name, `weights` is a column name or an array-like of numbers (list/`numpy.ndarray`/`pandas.Series`, matched to rows by position) |
+| `df.<accessor>.sum(*, groupby=None)` | Sum across rows; `groupby` is a column name |
 | `df.<accessor>.reframe(columns)` | Exactly the given ordered columns; missing ones filled with `0.0` |
 | `df.<accessor>.normalize(to=100.0)` | Normalise rows to sum to `to` |
 
@@ -163,6 +182,7 @@ Chains work seamlessly: `df.oxides().moles().oxides()` roundtrips back to wt%.
 | `df.mineral.site_allocations(mineral)` | Site allocations with hierarchical (site, cation) columns |
 | `df.mineral.end_members(mineral)` | End-member proportions (%) |
 | `df.mineral.check_stoichiometry(mineral)` | Stoichiometry validation scores (0–1) |
+| `df.mineral.stoichiometry_quality(mineral)` | Single 0–1 quality score: mean of `cation_deviation`, `site_vacancies`, `leftover_cations` |
 
 ### BulkAccessor (`df.bulk`)
 
@@ -266,6 +286,11 @@ Mutations are global and persist for the session.
 
 Inapplicable criteria are dropped (all-NaN columns removed).
 
+`df.mineral.stoichiometry_quality(mineral)` condenses three of those criteria —
+`cation_deviation`, `site_vacancies`, `leftover_cations` — into a single 0–1 score
+(their mean) per analysis, as a `pandas.Series`. NaN if the mineral doesn't define
+`ideal_cations` (so `cation_deviation` is NaN).
+
 ## Fe³⁺/Fe²⁺ estimation methods
 
 - **Droop (1987)**: `method="droop"` — charge-balance approach on total cations
@@ -282,4 +307,6 @@ Inapplicable criteria are dropped (all-NaN columns removed).
 - Unit tracking via `df.attrs["petro_units"]`: `"wt%"` (default) → `"moles"` → `"apfu"`
 - Callable accessors (`df.oxides()`, `df.moles()`, `df.cations()`) auto-convert from current units
 - `Mineral` instances are configuration objects — stateless, reusable
+- `str(mineral)` returns `mineral.abbreviation` (e.g. `"Grt"`, matching the instance
+  variable it's exported under); `repr(mineral)` returns `mineral.name` (e.g. `"Garnet"`)
 - Internal modules are underscore-prefixed (`_calc.py`, `_core.py`, `_minerals.py`, `_plotting.py`)

@@ -125,6 +125,40 @@ class TestCheckStoichiometryScoring:
 # ---------------------------------------------------------------------------
 
 
+class TestStoichiometryQuality:
+    def test_matches_check_stoichiometry_mean(self, garnet_multi):
+        checked = garnet_multi.mineral.check_stoichiometry(Grt)
+        quality = garnet_multi.mineral.stoichiometry_quality(Grt)
+        expected = (
+            checked["cation_deviation"]
+            + checked["site_vacancies"]
+            + checked["leftover_cations"]
+        ) / 3.0
+        pd.testing.assert_series_equal(quality, expected, check_names=False)
+
+    def test_returns_series(self, garnet_multi):
+        quality = garnet_multi.mineral.stoichiometry_quality(Grt)
+        assert isinstance(quality, pd.Series)
+        assert quality.name == "stoichiometry_quality"
+
+    def test_preserves_index(self, garnet_multi):
+        quality = garnet_multi.mineral.stoichiometry_quality(Grt)
+        pd.testing.assert_index_equal(quality.index, garnet_multi.index)
+
+    def test_between_0_and_1(self, fe_garnet_multi):
+        quality = fe_garnet_multi.mineral.stoichiometry_quality(Grt)
+        assert (quality >= 0).all()
+        assert (quality <= 1).all()
+
+    def test_high_for_ideal_analysis(self, diopside):
+        quality = diopside.mineral.stoichiometry_quality(Cpx)
+        assert quality.iloc[0] > 0.9
+
+    def test_nan_when_no_ideal_cations(self, staurolite):
+        quality = staurolite.mineral.stoichiometry_quality(St)
+        assert quality.isna().all()
+
+
 class TestCheckStoichiometryMinerals:
     def test_amphibole(self, amphibole):
         result = amphibole.mineral.check_stoichiometry(Amp)

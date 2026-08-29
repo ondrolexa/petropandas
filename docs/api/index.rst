@@ -50,6 +50,8 @@ Mineral Analysis Accessor
      - Calculate end-member proportions
    * - ``df.mineral.check_stoichiometry(mineral)``
      - Score analytical quality (0–1)
+   * - ``df.mineral.stoichiometry_quality(mineral)``
+     - Single 0–1 quality score (mean of cation_deviation, site_vacancies, leftover_cations)
 
 Bulk Composition Accessor
 -------------------------
@@ -64,6 +66,8 @@ Bulk Composition Accessor
      - Cleaned copy in wt%
    * - ``df.bulk.mean(*, groupby=None, weights=None)``
      - Mean oxide wt%; optional weighted mean
+   * - ``df.bulk.sum(*, groupby=None)``
+     - Sum of oxide wt%; optional groupby
    * - ``df.bulk.cipw()``
      - CIPW normative mineralogy
    * - ``df.bulk.alumina_saturation()``

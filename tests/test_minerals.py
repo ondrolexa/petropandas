@@ -23,6 +23,7 @@ from petropandas._minerals import (
     Spl,
     St,
     Ttn,
+    mdb,
 )
 
 # ---------------------------------------------------------------------------
@@ -39,6 +40,128 @@ class TestMineralBase:
 
     def test_name(self) -> None:
         assert Grt.name == "Garnet"
+
+    def test_str_returns_abbreviation(self) -> None:
+        assert str(Grt) == "Grt"
+        assert str(Ms) == "Ms"
+        assert str(GrtFe3) == "GrtFe3"
+
+    def test_repr_returns_name(self) -> None:
+        assert repr(Grt) == "Garnet"
+        assert repr(Ms) == "Muscovite"
+        assert repr(GrtFe3) == "GarnetFe3"
+
+    def test_base_abbreviation_default(self) -> None:
+        assert Mineral().abbreviation == ""
+
+
+# ---------------------------------------------------------------------------
+# name / abbreviation across all built-in minerals
+# ---------------------------------------------------------------------------
+
+_MINERAL_ABBREVIATIONS = {
+    Grt: "Grt",
+    GrtFe3: "GrtFe3",
+    Fsp: "Fsp",
+    Cpx: "Cpx",
+    Opx: "Opx",
+    Ms: "Ms",
+    Bt: "Bt",
+    St: "St",
+    Chl: "Chl",
+    Ep: "Ep",
+    Amp: "Amp",
+    Ttn: "Ttn",
+    Cld: "Cld",
+    Crd: "Crd",
+    Ilm: "Ilm",
+    Spl: "Spl",
+}
+
+
+class TestNameAndAbbreviation:
+    @pytest.mark.parametrize(
+        ("mineral", "abbreviation"), _MINERAL_ABBREVIATIONS.items()
+    )
+    def test_abbreviation_matches_instance_name(
+        self, mineral: Mineral, abbreviation: str
+    ) -> None:
+        assert mineral.abbreviation == abbreviation
+
+    @pytest.mark.parametrize("mineral", _MINERAL_ABBREVIATIONS.keys())
+    def test_str_matches_abbreviation(self, mineral: Mineral) -> None:
+        assert str(mineral) == mineral.abbreviation
+
+    @pytest.mark.parametrize("mineral", _MINERAL_ABBREVIATIONS.keys())
+    def test_repr_matches_name(self, mineral: Mineral) -> None:
+        assert repr(mineral) == mineral.name
+
+
+# ---------------------------------------------------------------------------
+# mdb — mineral registry
+# ---------------------------------------------------------------------------
+
+_EXPECTED_MINERALS = [
+    Grt,
+    GrtFe3,
+    Fsp,
+    Cpx,
+    Opx,
+    Ms,
+    Bt,
+    St,
+    Chl,
+    Ep,
+    Amp,
+    Ttn,
+    Cld,
+    Crd,
+    Ilm,
+    Spl,
+]
+
+
+class TestMineralDatabase:
+    def test_all_yields_all_minerals_in_order(self) -> None:
+        assert list(mdb.all()) == _EXPECTED_MINERALS
+
+    def test_names(self) -> None:
+        assert mdb.names == [m.name for m in _EXPECTED_MINERALS]
+
+    def test_abbreviations(self) -> None:
+        assert mdb.abbreviations == [m.abbreviation for m in _EXPECTED_MINERALS]
+
+    def test_by_name_exact(self) -> None:
+        assert mdb.by_name("Garnet") is Grt
+
+    def test_by_name_case_insensitive(self) -> None:
+        assert mdb.by_name("garnet") is Grt
+        assert mdb.by_name("GARNET") is Grt
+
+    def test_by_abbreviation_exact(self) -> None:
+        assert mdb.by_abbreviation("Grt") is Grt
+
+    def test_by_abbreviation_case_insensitive(self) -> None:
+        assert mdb.by_abbreviation("grt") is Grt
+        assert mdb.by_abbreviation("GRT") is Grt
+
+    def test_by_name_not_found_raises(self) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            mdb.by_name("nope")
+
+    def test_by_abbreviation_not_found_raises(self) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            mdb.by_abbreviation("nope")
+
+    def test_repr(self) -> None:
+        assert repr(mdb) == "Mineral database (16 minerals available)"
+
+    def test_exported_from_top_level(self) -> None:
+        import petropandas
+
+        assert "mdb" in petropandas.__all__
+        assert "MineralDatabase" in petropandas.__all__
+        assert petropandas.mdb is mdb
 
 
 # ---------------------------------------------------------------------------

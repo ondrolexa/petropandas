@@ -1,6 +1,6 @@
 """petropandas — electron microprobe mineral analysis toolkit built on pandas."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 import functools
 
@@ -29,11 +29,13 @@ from petropandas._minerals import (
     GrtFe3,
     Ilm,
     Mineral,
+    MineralDatabase,
     Ms,
     Opx,
     Spl,
     St,
     Ttn,
+    mdb,
 )
 from petropandas._plotting import ProfilePlot, ScatterPlot, TernaryPlot
 from petropandas._series import MineralSeriesAccessor
@@ -56,6 +58,7 @@ __all__ = [
     "Ilm",
     "Mineral",
     "MineralAccessor",
+    "MineralDatabase",
     "MineralSeriesAccessor",
     "MolesAccessor",
     "Ms",
@@ -69,6 +72,7 @@ __all__ = [
     "St",
     "TernaryPlot",
     "Ttn",
+    "mdb",
     "pd",
     "ppconfig",
 ]

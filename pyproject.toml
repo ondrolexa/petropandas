@@ -11,11 +11,12 @@ requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
-    "pandas>=3.0.3",
     "periodictable>=2.1.0",
     "requests>=2.31",
     "matplotlib>=3.7",
     "python-calamine>=0.8.2",
+    "pandas>=3.0.5",
+    "pyperclip>=1.11.0",
 ]
 
 [project.urls]

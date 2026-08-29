@@ -135,11 +135,11 @@ class _CleaningAccessor:
 class _BaseAccessor(_CleaningAccessor):
     """Shared row-wise helpers for the DataFrame-shape accessors.
 
-    Adds ``mean()``, ``reframe()``, ``normalize()``, and ``select()`` on
-    top of ``_CleaningAccessor``'s cleaning constructor. Used by
-    ``OxidesAccessor``, ``MolesAccessor``, ``CationsAccessor``, and
-    ``BulkAccessor`` — not ``MineralAccessor``, which stays on the plain
-    ``_CleaningAccessor`` base.
+    Adds ``mean()``, ``sum()``, ``reframe()``, ``normalize()``, and
+    ``select()`` on top of ``_CleaningAccessor``'s cleaning constructor.
+    Used by ``OxidesAccessor``, ``MolesAccessor``, ``CationsAccessor``,
+    and ``BulkAccessor`` — not ``MineralAccessor``, which stays on the
+    plain ``_CleaningAccessor`` base.
     """
 
     def normalize(self, to: float = 100.0) -> pd.DataFrame:
@@ -253,6 +253,40 @@ class _BaseAccessor(_CleaningAccessor):
                 result = pd.DataFrame(
                     {col: [weighted[col].sum() / weight_sum] for col in cols}
                 )
+
+        result.attrs["petro_units"] = self._units()
+        return result
+
+    def sum(self, *, groupby: str | None = None) -> pd.DataFrame:
+        """Compute the sum across rows in the accessor's current units.
+
+        Operates on ``self._obj`` as-is — it does not force a unit
+        conversion, so the result reflects whatever ``petro_units``
+        (wt%, moles, or apfu) the accessor's data is currently in.
+
+        Args:
+            groupby: Column name to group by. When *None* (default) a
+                single-row DataFrame with the overall sum is returned.
+                When given, one row per group is returned with the group
+                label as index.
+
+        Returns:
+            DataFrame with summed values, tagged with the accessor's
+            current ``petro_units``.
+
+        Raises:
+            ValueError: If *groupby* names a missing column.
+        """
+        if groupby is not None and groupby not in self._obj.columns:
+            msg = f"Groupby column {groupby!r} not found in DataFrame"
+            raise ValueError(msg)
+
+        cols = _core_formula_cols(self._obj)
+
+        if groupby is not None:
+            result = self._obj.groupby(groupby)[cols].sum()
+        else:
+            result = pd.DataFrame({col: [self._obj[col].sum()] for col in cols})
 
         result.attrs["petro_units"] = self._units()
         return result
@@ -406,6 +440,38 @@ class MineralAccessor(_CleaningAccessor):
             index=df.index,
         )
         return result.dropna(axis=1, how="all")
+
+    def stoichiometry_quality(self, mineral: Mineral) -> pd.Series:
+        """Overall stoichiometry quality score for a mineral, in [0, 1].
+
+        Args:
+            mineral: Mineral instance providing ideal ranges, sites, and
+                valence-split configuration.
+
+        Returns:
+            Series with the same index as the input: the mean of the
+            ``cation_deviation``, ``site_vacancies``, and
+            ``leftover_cations`` scores from :meth:`check_stoichiometry`
+            (each 0-1, so the mean is too).
+        """
+        df = self._obj
+        units = self._units()
+
+        try:
+            apfu_df = mineral._raw_apfu(df, units=units)
+        except KeyError:
+            apfu_df = _calc.to_apfu(df, n_oxygens=mineral.n_oxygens, units=units)
+        site_alloc = mineral._allocate_sites(apfu_df)
+
+        cation_deviation = _calc.score_cation_deviation(apfu_df, mineral.ideal_cations)
+        site_vacancies = _calc.score_site_vacancies(
+            site_alloc, mineral.site_definitions
+        )
+        leftover_cations = _calc.score_leftover_cations(apfu_df, site_alloc)
+
+        result = (cation_deviation + site_vacancies + leftover_cations) / 3.0
+        result.name = "stoichiometry_quality"
+        return result
 
 
 # ---------------------------------------------------------------------------
