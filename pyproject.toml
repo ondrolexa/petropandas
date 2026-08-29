@@ -26,6 +26,7 @@ Issues = "https://github.com/ondrolexa/petropandas/issues"
 
 [project.optional-dependencies]
 lab = ["jupyterlab"]
+tests = ["pytest", "pytest-cov"]
 docs = [
     "sphinx>=7.0",
     "shibuya",
@@ -38,10 +39,7 @@ docs = [
 ]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.4",
-]
+dev = ["petropandas[lab,tests,docs]", "ruff>=0.6", "pre-commit"]
 
 [tool.hatch.version]
 path = "src/petropandas/__init__.py"
