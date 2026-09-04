@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-09-04
+
+### Added
+- `df.cations.total_charge()`: total positive charge per row, summed over ion-named columns
+- `df.<accessor>.calc(new_col, expr)`, available on all `_BaseAccessor` subclasses: add a column computed from a `pandas.eval()`-style expression, reusing the plotting axes' expression syntax (`petropandas._calc.eval_expr`)
+
 ## [0.2.1] - 2026-08-29
 
 ### Added

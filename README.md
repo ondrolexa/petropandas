@@ -145,6 +145,7 @@ that same unit — `df.mineral` does **not** have these:
 | `df.<accessor>.sum(*, groupby=None)` | Sum across rows; `groupby` is a column name |
 | `df.<accessor>.reframe(columns)` | Exactly the given ordered columns; missing ones filled with `0.0` |
 | `df.<accessor>.normalize(to=100.0)` | Normalise rows to sum to `to` |
+| `df.<accessor>.calc(new_col, expr)` | Add `new_col` computed from a `pandas.eval()`-style expression (backtick-quote special-character column names, e.g. `` "`Fe{2+}` + `Mg{2+}`" ``) |
 
 ### OxidesAccessor (`df.oxides`)
 
@@ -169,6 +170,7 @@ that same unit — `df.mineral` does **not** have these:
 |--------|-------------|
 | `df.cations(n_oxygens=N)` | Atoms per formula unit (oxygen basis) |
 | `df.cations(n_cations=N)` | Atoms per formula unit (cation basis) |
+| `df.cations.total_charge()` | Total positive charge per row, summed over ion-named columns |
 
 All callable accessors auto-convert from the current `petro_units` attr.
 Chains work seamlessly: `df.oxides().moles().oxides()` roundtrips back to wt%.

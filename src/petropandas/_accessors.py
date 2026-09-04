@@ -297,7 +297,7 @@ class _BaseAccessor(_CleaningAccessor):
         *,
         on: str | None = None,
     ) -> pd.DataFrame:
-        """Filter rows by index, column values, or boolean mask.
+        """Select rows by index, column values, or boolean mask.
 
         Args:
             arg: Selection criterion:
@@ -344,6 +344,29 @@ class _BaseAccessor(_CleaningAccessor):
         out = out.copy()
         out.attrs["petro_units"] = self._units()
         return out
+
+    def calc(self, new_col: str, expr: str) -> pd.DataFrame:
+        """Add a column computed from a ``pandas.eval()``-style expression.
+
+        Args:
+            new_col: Name of the column to add (overwrites if it already
+                exists).
+            expr: A column name of the DataFrame, or an eval expression —
+                see ``petropandas._calc.eval_expr`` for the full syntax
+                (backtick-quoting for special-character names like
+                ``"Al{3+}"``, missing-name zero-fill in multi-term
+                expressions).
+
+        Returns:
+            Copy of the DataFrame with ``new_col`` added.
+
+        Raises:
+            TypeError: If ``expr`` doesn't evaluate to a ``pandas.Series``.
+        """
+        result = self._obj.copy()
+        result[new_col] = _calc.eval_expr(expr, result)
+        result.attrs["petro_units"] = self._units()
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -663,6 +686,21 @@ class CationsAccessor(_BaseAccessor):
         result.attrs["petro_n_oxygens"] = n_oxygens
         result.attrs["petro_n_cations"] = n_cations
         result.attrs["petro_total"] = total
+        return result
+
+    def total_charge(self) -> pd.Series:
+        """Total positive charge summed over ion-named columns.
+
+        Operates on the data as-is in its current ``petro_units`` (no forced
+        conversion) — call after ``df.cations(...)`` for a meaningful
+        APFU-basis result, mirroring ``mean()``/``sum()``.
+
+        Returns:
+            Series of total positive charge per row (e.g. one ``Fe{2+}``
+            atom contributes 2).
+        """
+        result = _calc.total_charge(self._obj)
+        result.name = "total_charge"
         return result
 
 

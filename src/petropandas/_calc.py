@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,95 @@ from petropandas._core import (
     _oxygens_per,
     _parse_ion,
 )
+
+# Matches an expr that is *only* a single column reference (bare identifier or one
+# backtick-quoted name) with nothing else - used to tell "reference this one column"
+# (a missing name should raise) apart from a genuine multi-term expression (a missing
+# name should default to 0, see `eval_expr`).
+_SINGLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$|^`[^`]+`$")
+_NAME_TOKEN_RE = re.compile(r"`([^`]+)`|\b([A-Za-z_][A-Za-z0-9_]*)\b")
+# Python/numexpr keywords and function names DataFrame.eval() resolves itself - must
+# not be mistaken for missing columns and zero-filled.
+_EVAL_RESERVED = {
+    "and",
+    "or",
+    "not",
+    "in",
+    "is",
+    "if",
+    "else",
+    "True",
+    "False",
+    "None",
+    "abs",
+    "sqrt",
+    "log",
+    "log10",
+    "log1p",
+    "exp",
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "where",
+    "arctan2",
+}
+
+
+def _referenced_names(expr: str) -> set[str]:
+    """Bare/backtick-quoted identifiers referenced in a `DataFrame.eval()` expression."""
+    names = set()
+    for backtick, ident in _NAME_TOKEN_RE.findall(expr):
+        name = backtick or ident
+        if backtick or name not in _EVAL_RESERVED:
+            names.add(name)
+    return names
+
+
+def eval_expr(expr: str, data: pd.DataFrame) -> pd.Series:
+    """Evaluate a column expression against a DataFrame.
+
+    Args:
+        expr: A column name of ``data`` (matched directly, so exotic
+            names like ion notation ``"Al{3+}"`` work with no
+            escaping), or a ``DataFrame.eval()`` expression — wrap
+            special-character column names in backticks to combine
+            them (e.g. ``` "`Al{3+}` + `Si{4+}`" ```). A name missing
+            from ``data`` defaults to 0 *within a multi-term
+            expression*; a single column reference that's entirely
+            missing still raises.
+        data: Samples in rows, variables in columns.
+
+    Returns:
+        The per-row values as a ``pandas.Series``.
+
+    Raises:
+        TypeError: If ``expr`` evaluates to something other than a
+            ``pandas.Series`` (e.g. a constant expression).
+    """
+    stripped = expr.strip()
+    if stripped in data.columns:
+        result = data[stripped]
+    elif _SINGLE_NAME_RE.fullmatch(stripped):
+        result = data.eval(expr)
+    else:
+        missing = _referenced_names(expr) - set(data.columns)
+        if missing:
+            data = data.copy()
+            for name in missing:
+                data[name] = 0.0
+        result = data.eval(expr)
+    if not isinstance(result, pd.Series):
+        raise TypeError(
+            f"Expression {expr!r} must evaluate to a pandas Series, "
+            f"got {type(result).__name__}"
+        )
+    return result
 
 
 def molecular_weights(cols: pd.Index | list[str]) -> pd.Series:
@@ -568,6 +658,20 @@ def score_cation_deviation(
     return (1.0 - (apfu_sum - ideal_cations).abs() / ideal_cations).clip(lower=0.0)
 
 
+def total_charge(apfu_df: pd.DataFrame) -> pd.Series:
+    """Sum ion charge x amount over ion-named columns.
+
+    Args:
+        apfu_df: APFU DataFrame with ion- or oxide-named columns (non-ion
+            columns contribute 0).
+
+    Returns:
+        Series of total positive charge per row.
+    """
+    charges = {col: (_parse_ion(col) or (None, 0))[1] for col in apfu_df.columns}
+    return apfu_df.mul(pd.Series(charges)).sum(axis=1)
+
+
 def score_charge_balance(apfu_df: pd.DataFrame, n_oxygens: float) -> pd.Series:
     """Score total positive charge against the charge expected from *n_oxygens*.
 
@@ -579,10 +683,7 @@ def score_charge_balance(apfu_df: pd.DataFrame, n_oxygens: float) -> pd.Series:
         Series of scores (0-1), exponentially decaying with the charge
         residual.
     """
-    charges = {col: (_parse_ion(col) or (None, 0))[1] for col in apfu_df.columns}
-    total_charge = apfu_df.mul(pd.Series(charges)).sum(axis=1)
-    expected = 2.0 * n_oxygens
-    residuals = (total_charge - expected).abs()
+    residuals = (total_charge(apfu_df) - 2.0 * n_oxygens).abs()
     return np.exp(-residuals / 0.5)
 
 

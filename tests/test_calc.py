@@ -8,6 +8,7 @@ import pytest
 from petropandas._calc import (
     cation_moles,
     convert,
+    eval_expr,
     fe2o3_to_feo,
     feo_to_fe2o3,
     from_apfu,
@@ -552,3 +553,40 @@ class TestSortApfuColumns:
         df = pd.DataFrame({"Si{4+}": [0.1], "Label": ["p-01"]})
         result = sort_apfu_columns(df)
         assert set(result.columns) == {"Si{4+}", "Label"}
+
+
+class TestEvalExpr:
+    def test_bare_column_name(self) -> None:
+        df = pd.DataFrame({"Prp": [10.0, 20.0]})
+        result = eval_expr("Prp", df)
+        assert result.tolist() == [10.0, 20.0]
+
+    def test_arithmetic_expression(self) -> None:
+        df = pd.DataFrame({"Sps": [1.0, 2.0], "Grs": [3.0, 4.0]})
+        result = eval_expr("Sps+Grs", df)
+        assert result.tolist() == [4.0, 6.0]
+
+    def test_bare_special_character_column_name(self) -> None:
+        df = pd.DataFrame({"Al{3+}": [1.5, 2.5]})
+        result = eval_expr("Al{3+}", df)
+        assert result.tolist() == [1.5, 2.5]
+
+    def test_backtick_quoted_special_character_columns(self) -> None:
+        df = pd.DataFrame({"Al{3+}": [1.0, 2.0], "Si{4+}": [3.0, 4.0]})
+        result = eval_expr("`Al{3+}` + `Si{4+}`", df)
+        assert result.tolist() == [4.0, 6.0]
+
+    def test_missing_name_defaults_to_zero_in_multi_term_expression(self) -> None:
+        df = pd.DataFrame({"Sps": [1.0, 2.0]})
+        result = eval_expr("Sps+Grs", df)
+        assert result.tolist() == [1.0, 2.0]
+
+    def test_missing_single_bare_name_raises(self) -> None:
+        df = pd.DataFrame({"Sps": [1.0, 2.0]})
+        with pytest.raises(pd.errors.UndefinedVariableError):
+            eval_expr("Grs", df)
+
+    def test_non_series_result_raises_type_error(self) -> None:
+        df = pd.DataFrame({"Sps": [1.0, 2.0]})
+        with pytest.raises(TypeError, match="must evaluate to a pandas Series"):
+            eval_expr("1 + 1", df)

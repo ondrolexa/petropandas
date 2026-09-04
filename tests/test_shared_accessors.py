@@ -1,4 +1,4 @@
-"""Tests for `mean`/`sum`/`reframe`/`normalize`/`select` shared via `_BaseAccessor`."""
+"""Tests for `mean`/`sum`/`reframe`/`normalize`/`select`/`calc` shared via `_BaseAccessor`."""
 
 from __future__ import annotations
 
@@ -19,6 +19,9 @@ class TestOxidesMethodsNotRedefined:
     def test_select_is_inherited(self) -> None:
         assert "select" not in OxidesAccessor.__dict__
 
+    def test_calc_is_inherited(self) -> None:
+        assert "calc" not in OxidesAccessor.__dict__
+
 
 class TestMineralAccessorHasNoBaseAccessorMethods:
     def test_no_mean(self, garnet_multi: pd.DataFrame) -> None:
@@ -35,6 +38,9 @@ class TestMineralAccessorHasNoBaseAccessorMethods:
 
     def test_no_select(self, garnet_multi: pd.DataFrame) -> None:
         assert not hasattr(garnet_multi.mineral, "select")
+
+    def test_no_calc(self, garnet_multi: pd.DataFrame) -> None:
+        assert not hasattr(garnet_multi.mineral, "calc")
 
 
 class TestMeanAcrossUnits:
@@ -137,3 +143,39 @@ class TestSelectAcrossUnits:
         result = garnet_multi.bulk.select([0, 2])
         assert list(result.index) == [0, 2]
         assert result.attrs.get("petro_units") == "wt%"
+
+
+class TestCalcAcrossUnits:
+    def test_adds_column_with_correct_values(self, garnet_multi: pd.DataFrame) -> None:
+        moles = garnet_multi.moles()
+        result = moles.moles.calc("SiAl", "SiO2 + Al2O3")
+        for i in moles.index:
+            assert result.loc[i, "SiAl"] == pytest.approx(
+                moles.loc[i, "SiO2"] + moles.loc[i, "Al2O3"]
+            )
+
+    def test_preserves_existing_columns(self, garnet_multi: pd.DataFrame) -> None:
+        oxides = garnet_multi.oxides()
+        result = oxides.oxides.calc("SiAl", "SiO2 + Al2O3")
+        for col in oxides.columns:
+            assert result[col].tolist() == oxides[col].tolist()
+
+    def test_moles_units_preserved(self, garnet_multi: pd.DataFrame) -> None:
+        moles = garnet_multi.moles()
+        result = moles.moles.calc("SiAl", "SiO2 + Al2O3")
+        assert result.attrs.get("petro_units") == "moles"
+
+    def test_cations_units_preserved(self, garnet_multi: pd.DataFrame) -> None:
+        apfu = garnet_multi.cations(n_oxygens=12)
+        result = apfu.cations.calc("MgFe", "`Mg{2+}` + `Fe{2+}`")
+        assert result.attrs.get("petro_units") == "apfu"
+
+    def test_overwrites_existing_column(self, garnet_multi: pd.DataFrame) -> None:
+        oxides = garnet_multi.oxides()
+        result = oxides.oxides.calc("SiO2", "SiO2 * 2")
+        assert result["SiO2"].tolist() == pytest.approx((oxides["SiO2"] * 2).tolist())
+
+    def test_non_series_expression_raises(self, garnet_multi: pd.DataFrame) -> None:
+        oxides = garnet_multi.oxides()
+        with pytest.raises(TypeError, match="must evaluate to a pandas Series"):
+            oxides.oxides.calc("Const", "1 + 1")

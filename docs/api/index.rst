@@ -33,6 +33,17 @@ These accessors convert between different representations of oxide data.
 All accessors auto-convert from the current unit tracked in
 ``df.attrs["petro_units"]`` (default: ``"wt%"``).
 
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Accessor
+     - Description
+   * - ``df.cations.total_charge()``
+     - Total positive charge per row, summed over ion-named columns
+   * - ``df.<accessor>.calc(new_col, expr)``
+     - Add ``new_col`` computed from a ``pandas.eval()``-style expression (backtick-quote special-character column names)
+
 Mineral Analysis Accessor
 -------------------------
 

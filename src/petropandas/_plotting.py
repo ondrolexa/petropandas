@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import itertools
 import math
-import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -13,59 +12,13 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
 
+from petropandas import _calc
+
 # Default legend placement: outside the axes to the right, vertically
 # centered. `constrained_layout` shrinks the axes to make room for a legend
 # placed this way as long as it's attached via `Axes.legend()` (not
 # `Figure.legend()`).
 _LEGEND_OUTSIDE_KWARGS = {"loc": "center left", "bbox_to_anchor": (1.02, 0.5)}
-
-# Matches an expr that is *only* a single column reference (bare identifier or one
-# backtick-quoted name) with nothing else - used to tell "plot this one column" (a
-# missing name should raise) apart from a genuine multi-term expression (a missing
-# name should default to 0, see `_eval`).
-_SINGLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$|^`[^`]+`$")
-_NAME_TOKEN_RE = re.compile(r"`([^`]+)`|\b([A-Za-z_][A-Za-z0-9_]*)\b")
-# Python/numexpr keywords and function names DataFrame.eval() resolves itself - must
-# not be mistaken for missing columns and zero-filled.
-_EVAL_RESERVED = {
-    "and",
-    "or",
-    "not",
-    "in",
-    "is",
-    "if",
-    "else",
-    "True",
-    "False",
-    "None",
-    "abs",
-    "sqrt",
-    "log",
-    "log10",
-    "log1p",
-    "exp",
-    "sin",
-    "cos",
-    "tan",
-    "arcsin",
-    "arccos",
-    "arctan",
-    "sinh",
-    "cosh",
-    "tanh",
-    "where",
-    "arctan2",
-}
-
-
-def _referenced_names(expr: str) -> set[str]:
-    """Bare/backtick-quoted identifiers referenced in a `DataFrame.eval()` expression."""
-    names = set()
-    for backtick, ident in _NAME_TOKEN_RE.findall(expr):
-        name = backtick or ident
-        if backtick or name not in _EVAL_RESERVED:
-            names.add(name)
-    return names
 
 
 def _strip_backticks(expr: str) -> str:
@@ -211,43 +164,9 @@ class BasePlot(ABC):
     def _eval(expr: str, data: pd.DataFrame) -> pd.Series:
         """Evaluate a column expression against a group's DataFrame.
 
-        Args:
-            expr: A column name of ``data`` (matched directly, so exotic
-                names like ion notation ``"Al{3+}"`` work with no
-                escaping), or a ``DataFrame.eval()`` expression — wrap
-                special-character column names in backticks to combine
-                them (e.g. ``` "`Al{3+}` + `Si{4+}`" ```). A name missing
-                from ``data`` defaults to 0 *within a multi-term
-                expression* (e.g. plotting ``"Sps+Grs"`` across mineral
-                groups that don't all report ``Sps``); a single column
-                reference that's entirely missing still raises.
-            data: Samples in rows, variables in columns.
-
-        Returns:
-            The per-row values as a ``pandas.Series``.
-
-        Raises:
-            TypeError: If ``expr`` evaluates to something other than a
-                ``pandas.Series`` (e.g. a constant expression).
+        See ``petropandas._calc.eval_expr`` for the full expression syntax.
         """
-        stripped = expr.strip()
-        if stripped in data.columns:
-            result = data[stripped]
-        elif _SINGLE_NAME_RE.fullmatch(stripped):
-            result = data.eval(expr)
-        else:
-            missing = _referenced_names(expr) - set(data.columns)
-            if missing:
-                data = data.copy()
-                for name in missing:
-                    data[name] = 0.0
-            result = data.eval(expr)
-        if not isinstance(result, pd.Series):
-            raise TypeError(
-                f"Expression {expr!r} must evaluate to a pandas Series, "
-                f"got {type(result).__name__}"
-            )
-        return result
+        return _calc.eval_expr(expr, data)
 
     @abstractmethod
     def _plot_group(
