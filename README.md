@@ -86,8 +86,8 @@ Returns a DataFrame of 0–1 scores per criterion (1 = perfect fit).
 | Orthopyroxene | `Opx` | 6 | 4 | Droop | MgTs, Wo, En, Fs |
 | Muscovite | `Ms` | 11 | 7 | — | Al-Cel, Fe-Al-Cel, Prl, Mrg, Pg, Ms, Trioct |
 | Biotite | `Bt` | 11 | 7 | — | Phl, Ann, Eas, Sid, Dioct |
-| Staurolite | `St` | 48 | — | — | Fe-St, Mg-St, Zn-St, Mn-St |
-| Chlorite | `Chl` | 14* | — | — | Clin, Cham, Mg-Sud, Fe-Sud |
+| Staurolite | `St` | 48 | 29.5† | — | Fe-St, Mg-St, Zn-St, Mn-St |
+| Chlorite | `Chl` | 14* | 10 | — | Clin, Cham, Pnn, Nim, Mg-Sud, Fe-Sud |
 | Epidote | `Ep` | 12.5 | 8 | FeO→Fe₂O₃ | Czo, Ep, Pmn, Muk, Taw |
 | Amphibole | `Amp` | 23 | 15 | Schumacher | Tr, Act, Ed, F-Ed, Prg, F-Prg, Tsch, Rct, Win, Glau, F-Glau, Rieb, Mg-Rieb |
 | Titanite | `Ttn` | 5 | 3 | FeO→Fe₂O₃ | Ttn, Al-Ttn, Fe-Ttn, Mal, Other |
@@ -97,6 +97,7 @@ Returns a DataFrame of 0–1 scores per criterion (1 = perfect fit).
 | Spinel | `Spl` | 4 | 3 | Droop | Spl, Herc, Chrm, Mtc, Gahn, Frank, Jac, Ulv, Spss |
 
 \* Chlorite uses 28-charge normalization (n_oxygens=14 effective).
+† Staurolite's 29.5 reflects typical partial vacancy at its divalent Y-site (crystallographic maximum is 30, across T=8/M=18/Y=4).
 
 All 16 instances above are also registered in `mdb` (`from petropandas import mdb`), a
 small lookup registry:
@@ -124,13 +125,21 @@ from petropandas.hpxeos.metapelite import TC_g
 
 df.mineral.apfu(TC_g)
 df.mineral.site_allocations(TC_g)
+df.mineral.variables(TC_g)
 df.mineral.end_members(TC_g)
 df.mineral.check_stoichiometry(TC_g)
 ```
 
 `Phase` subclasses with order-disorder variables (e.g. Biotite `Q`, Augite `Qfm`/`Qal`)
 accept an optional `order_parameters` dict, passed through
-`df.mineral.end_members(mineral, order_parameters={...})`.
+`df.mineral.end_members(mineral, order_parameters={...})`. `df.mineral.variables(phase)`
+returns the a-x pipeline's two intermediate stages — site fractions (e.g. Biotite's
+`Fe`, `Mg`, `AlOct`) followed by the derived compositional variables (x, y, z, m, Q,
+...), in that column order — between site allocation and end-member proportions, for a
+`Phase` instance only (not plain `Mineral` instances, which have no
+`site_fractions`/`variables` methods); any order-disorder variable defaults to `0.0`
+(fully disordered) — call `phase.variables(...)` directly to supply
+`order_parameters`.
 
 ## API reference
 
@@ -145,7 +154,7 @@ that same unit — `df.mineral` does **not** have these:
 | `df.<accessor>.sum(*, groupby=None)` | Sum across rows; `groupby` is a column name |
 | `df.<accessor>.reframe(columns)` | Exactly the given ordered columns; missing ones filled with `0.0` |
 | `df.<accessor>.normalize(to=100.0)` | Normalise rows to sum to `to` |
-| `df.<accessor>.calc(new_col, expr)` | Add `new_col` computed from a `pandas.eval()`-style expression (backtick-quote special-character column names, e.g. `` "`Fe{2+}` + `Mg{2+}`" ``) |
+| `df.<accessor>.calc(new_col, expr)` or `.calc({new_col: expr, ...})` | Add one or more columns computed from `pandas.eval()`-style expressions (later expressions may reference earlier `new_col`s in the same call); ion-notation names are auto-quoted (`"Fe{2+} + Mg{2+}"` works with no backticks), other special-character column names still need backtick-quoting |
 
 ### OxidesAccessor (`df.oxides`)
 
@@ -310,5 +319,7 @@ Inapplicable criteria are dropped (all-NaN columns removed).
 - Callable accessors (`df.oxides()`, `df.moles()`, `df.cations()`) auto-convert from current units
 - `Mineral` instances are configuration objects — stateless, reusable
 - `str(mineral)` returns `mineral.abbreviation` (e.g. `"Grt"`, matching the instance
-  variable it's exported under); `repr(mineral)` returns `mineral.name` (e.g. `"Garnet"`)
+  variable it's exported under); `repr(mineral)` returns
+  `f"{name}[{abbreviation}] cations={ideal_cations} n_oxygens={n_oxygens}"`
+  (e.g. `"Garnet[Grt] cations=8 n_oxygens=12"`)
 - Internal modules are underscore-prefixed (`_calc.py`, `_core.py`, `_minerals.py`, `_plotting.py`)

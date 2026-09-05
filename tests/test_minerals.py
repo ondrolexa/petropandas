@@ -46,10 +46,10 @@ class TestMineralBase:
         assert str(Ms) == "Ms"
         assert str(GrtFe3) == "GrtFe3"
 
-    def test_repr_returns_name(self) -> None:
-        assert repr(Grt) == "Garnet"
-        assert repr(Ms) == "Muscovite"
-        assert repr(GrtFe3) == "GarnetFe3"
+    def test_repr_returns_name_abbreviation_cations_and_oxygens(self) -> None:
+        assert repr(Grt) == "Garnet[Grt] cations=8 n_oxygens=12"
+        assert repr(Ms) == "Muscovite[Ms] cations=7 n_oxygens=11"
+        assert repr(GrtFe3) == "GarnetFe3[GrtFe3] cations=8 n_oxygens=12"
 
     def test_base_abbreviation_default(self) -> None:
         assert Mineral().abbreviation == ""
@@ -93,8 +93,13 @@ class TestNameAndAbbreviation:
         assert str(mineral) == mineral.abbreviation
 
     @pytest.mark.parametrize("mineral", _MINERAL_ABBREVIATIONS.keys())
-    def test_repr_matches_name(self, mineral: Mineral) -> None:
-        assert repr(mineral) == mineral.name
+    def test_repr_matches_name_abbreviation_cations_and_oxygens(
+        self, mineral: Mineral
+    ) -> None:
+        assert repr(mineral) == (
+            f"{mineral.name}[{mineral.abbreviation}] "
+            f"cations={mineral.ideal_cations} n_oxygens={mineral.n_oxygens}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -524,8 +529,10 @@ class TestStaurolite:
         result = St.site_allocations(staurolite_multi)
         t_cols = [c for c in result.columns if c[0] == "T"]
         m_cols = [c for c in result.columns if c[0] == "M"]
+        y_cols = [c for c in result.columns if c[0] == "Y"]
         assert len(t_cols) > 0
         assert len(m_cols) > 0
+        assert len(y_cols) > 0
 
     def test_end_members_columns(self, staurolite_multi: pd.DataFrame) -> None:
         result = St.end_members(staurolite_multi)
@@ -572,11 +579,61 @@ class TestChlorite:
 
     def test_end_members_columns(self, chlorite_multi: pd.DataFrame) -> None:
         result = Chl.end_members(chlorite_multi)
-        expected = {"Clinochlore", "Chamosite", "Mg-Sudoite", "Fe-Sudoite"}
+        expected = {
+            "Clinochlore",
+            "Chamosite",
+            "Pennantite",
+            "Nimite",
+            "Mg-Sudoite",
+            "Fe-Sudoite",
+        }
         assert expected == set(result.columns)
 
     def test_end_members_sum(self, chlorite_multi: pd.DataFrame) -> None:
         result = Chl.end_members(chlorite_multi)
+        for _, row in result.iterrows():
+            assert row.sum() == pytest.approx(100.0, abs=1.0)
+
+    def test_end_members_no_mn_ni_matches_mg_fe_only_split(
+        self, chlorite_multi: pd.DataFrame
+    ) -> None:
+        """Without MnO/NiO, Clinochlore/Chamosite match the old mg/(mg+fe) split."""
+        result = Chl.end_members(chlorite_multi)
+        apfu = Chl._raw_apfu(chlorite_multi)
+        mg, fe = apfu["Mg{2+}"], apfu["Fe{2+}"]
+        x_mg = mg / (mg + fe)
+        si = apfu["Si{4+}"]
+        x_normal = ((si - 2.0) / 1.0).clip(lower=0).clip(upper=1.0)
+        expected_clinochlore = x_normal * x_mg * 100
+        expected_chamosite = x_normal * (1.0 - x_mg) * 100
+        assert result["Clinochlore"].tolist() == pytest.approx(
+            expected_clinochlore.tolist()
+        )
+        assert result["Chamosite"].tolist() == pytest.approx(
+            expected_chamosite.tolist()
+        )
+        assert (result["Pennantite"] == 0).all()
+        assert (result["Nimite"] == 0).all()
+
+    def test_end_members_pennantite_and_nimite(
+        self, chlorite_multi: pd.DataFrame
+    ) -> None:
+        df = chlorite_multi.copy()
+        df["MnO"] = [3.0, 1.0, 0.5]
+        df["NiO"] = [1.0, 0.5, 0.2]
+        result = Chl.end_members(df)
+        apfu = Chl._raw_apfu(df)
+        r2_tri = apfu["Mg{2+}"] + apfu["Fe{2+}"] + apfu["Mn{2+}"] + apfu["Ni{2+}"]
+        si = apfu["Si{4+}"]
+        x_normal = ((si - 2.0) / 1.0).clip(lower=0).clip(upper=1.0)
+        expected_pennantite = x_normal * (apfu["Mn{2+}"] / r2_tri) * 100
+        expected_nimite = x_normal * (apfu["Ni{2+}"] / r2_tri) * 100
+        assert (result["Pennantite"] > 0).all()
+        assert (result["Nimite"] > 0).all()
+        assert result["Pennantite"].tolist() == pytest.approx(
+            expected_pennantite.tolist()
+        )
+        assert result["Nimite"].tolist() == pytest.approx(expected_nimite.tolist())
         for _, row in result.iterrows():
             assert row.sum() == pytest.approx(100.0, abs=1.0)
 

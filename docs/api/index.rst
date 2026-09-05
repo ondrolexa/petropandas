@@ -41,8 +41,8 @@ All accessors auto-convert from the current unit tracked in
      - Description
    * - ``df.cations.total_charge()``
      - Total positive charge per row, summed over ion-named columns
-   * - ``df.<accessor>.calc(new_col, expr)``
-     - Add ``new_col`` computed from a ``pandas.eval()``-style expression (backtick-quote special-character column names)
+   * - ``df.<accessor>.calc(new_col, expr)`` or ``.calc({new_col: expr, ...})``
+     - Add one or more columns computed from ``pandas.eval()``-style expressions (later expressions may reference an earlier ``new_col``); ion-notation names are auto-quoted, other special-character column names need backtick-quoting
 
 Mineral Analysis Accessor
 -------------------------
@@ -59,6 +59,8 @@ Mineral Analysis Accessor
      - Allocate cations to crystallographic sites
    * - ``df.mineral.end_members(mineral)``
      - Calculate end-member proportions
+   * - ``df.mineral.variables(phase)``
+     - hpxeos ``Phase`` only: site fractions followed by compositional variables (x, y, z, m, Q, ...), the two stages before end-member proportions
    * - ``df.mineral.check_stoichiometry(mineral)``
      - Score analytical quality (0–1)
    * - ``df.mineral.stoichiometry_quality(mineral)``

@@ -410,6 +410,38 @@ class TestTCBiotite:
         _sums_to_100(ordered)
 
 
+class TestTCBiotiteVariables:
+    def test_columns(self):
+        """Site-fraction columns come first, followed by compositional variables."""
+        _has_cols(
+            BI_DF.mineral.variables(TC_bi),
+            ["Fe", "Mg", "Mn", "Ti", "Fe3", "AlOct", "x", "m", "y", "f", "t", "Q"],
+        )
+
+    def test_site_fractions_match_phase_method(self):
+        result = BI_DF.mineral.variables(TC_bi)
+        apfu = TC_bi._raw_apfu(BI_DF)
+        expected = TC_bi.site_fractions(apfu)
+        for col in expected.columns:
+            assert result[col].tolist() == pytest.approx(expected[col].tolist())
+
+    def test_order_parameter_defaults_to_zero(self):
+        """The accessor doesn't accept order_parameters; Q is always fully disordered."""
+        result = BI_DF.mineral.variables(TC_bi)
+        assert (result["Q"] == 0.0).all()
+
+    def test_x_matches_fe_mg_ratio(self):
+        result = BI_DF.mineral.variables(TC_bi)
+        apfu = TC_bi._raw_apfu(BI_DF)
+        expected_x = apfu["Fe{2+}"] / (apfu["Fe{2+}"] + apfu["Mg{2+}"])
+        assert result["x"].tolist() == pytest.approx(expected_x.tolist())
+
+    def test_missing_required_column_raises(self):
+        incomplete = BI_DF.drop(columns=["SiO2"])
+        with pytest.raises(ValueError, match="missing required columns"):
+            incomplete.mineral.variables(TC_bi)
+
+
 # ---------------------------------------------------------------------------
 # Clinopyroxene / Augite (metabasite)
 # ---------------------------------------------------------------------------

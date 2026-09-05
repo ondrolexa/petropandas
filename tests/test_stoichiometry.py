@@ -21,7 +21,7 @@ from petropandas import (
     St,
     Ttn,
 )
-from petropandas._minerals import _score_trapezoidal
+from petropandas._minerals import Mineral, _score_trapezoidal
 
 # ---------------------------------------------------------------------------
 # _score_trapezoidal unit tests
@@ -76,7 +76,12 @@ class TestCheckStoichiometryShape:
         assert "fe3+_validity" not in result.columns
 
     def test_no_ideal_cations_excludes_cation_deviation(self, staurolite):
-        result = staurolite.mineral.check_stoichiometry(St)
+        mineral = Mineral(
+            n_oxygens=St.n_oxygens,
+            ideal_cations=None,
+            site_definitions=St.site_definitions,
+        )
+        result = staurolite.mineral.check_stoichiometry(mineral)
         assert "cation_deviation" not in result.columns
 
     def test_no_t_site_excludes_tetrahedral_fill(self, garnet_multi):
@@ -155,7 +160,12 @@ class TestStoichiometryQuality:
         assert quality.iloc[0] > 0.9
 
     def test_nan_when_no_ideal_cations(self, staurolite):
-        quality = staurolite.mineral.stoichiometry_quality(St)
+        mineral = Mineral(
+            n_oxygens=St.n_oxygens,
+            ideal_cations=None,
+            site_definitions=St.site_definitions,
+        )
+        quality = staurolite.mineral.stoichiometry_quality(mineral)
         assert quality.isna().all()
 
 
@@ -175,7 +185,14 @@ class TestCheckStoichiometryMinerals:
         result = chlorite.mineral.check_stoichiometry(Chl)
         assert result.shape[0] == 1
         assert "analytical_total" in result.columns
-        assert "cation_deviation" not in result.columns
+        assert "cation_deviation" in result.columns
+        assert 0.0 <= result["cation_deviation"].iloc[0] <= 1.0
+
+    def test_chlorite_stoichiometry_quality_not_nan(self, chlorite):
+        quality = chlorite.mineral.stoichiometry_quality(Chl)
+        assert not quality.isna().any()
+        assert (quality >= 0).all()
+        assert (quality <= 1).all()
 
     def test_chloritoid(self, chloritoid):
         result = chloritoid.mineral.check_stoichiometry(Cld)
@@ -217,6 +234,14 @@ class TestCheckStoichiometryMinerals:
         result = staurolite.mineral.check_stoichiometry(St)
         assert result.shape[0] == 1
         assert "tetrahedral_fill" in result.columns
+        assert "cation_deviation" in result.columns
+        assert 0.0 <= result["cation_deviation"].iloc[0] <= 1.0
+
+    def test_staurolite_stoichiometry_quality_not_nan(self, staurolite):
+        quality = staurolite.mineral.stoichiometry_quality(St)
+        assert not quality.isna().any()
+        assert (quality >= 0).all()
+        assert (quality <= 1).all()
 
     def test_titanite(self, titanite):
         result = titanite.mineral.check_stoichiometry(Ttn)
@@ -241,7 +266,7 @@ class TestCheckStoichiometryMinerals:
 
     def test_multi_row_chlorite(self, chlorite_multi):
         result = chlorite_multi.mineral.check_stoichiometry(Chl)
-        assert result.shape == (3, 5)
+        assert result.shape == (3, 6)
 
     def test_multi_row_epidote(self, epidote_multi):
         result = epidote_multi.mineral.check_stoichiometry(Ep)

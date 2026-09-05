@@ -72,7 +72,10 @@ class Mineral:
         return self.abbreviation
 
     def __repr__(self) -> str:
-        return self.name
+        return (
+            f"{self.name}[{self.abbreviation}] "
+            f"cations={self.ideal_cations} n_oxygens={self.n_oxygens}"
+        )
 
     # -- public API ----------------------------------------------------------
 
@@ -649,7 +652,7 @@ class Muscovite(Mineral):
     name = "Muscovite"
     abbreviation = "Ms"
     n_oxygens = 11
-    ideal_cations = 7.0
+    ideal_cations = 7
     analytical_total_range = (94.0, 97.0)
     valence_splits: ClassVar = []
     site_definitions: ClassVar = [
@@ -749,7 +752,7 @@ class Biotite(Mineral):
     name = "Biotite"
     abbreviation = "Bt"
     n_oxygens = 11
-    ideal_cations = 7.0
+    ideal_cations = 7
     analytical_total_range = (94.0, 97.0)
     valence_splits: ClassVar = []
     site_definitions: ClassVar = [
@@ -824,8 +827,12 @@ Bt = Biotite()
 class Staurolite(Mineral):
     """Staurolite — 48 oxygens.
 
-    Sites: T(8.0), M(12.0) — simplified.
-    Fe is assumed Fe²⁺ (no valence split).
+    Sites: T(8.0, Si+Al), M(18.0, Al-dominated octahedral: Al/Ti/Cr), Y(4.0,
+    divalent-cation "Fe site": Zn/Mn/Fe²⁺/Mg — historically named for its
+    tetrahedral-like coordination, typically only ~3 of 4 occupied).
+    Fe is assumed Fe²⁺ (no valence split). ``ideal_cations=29.5`` reflects the
+    doubled ideal formula Fe₄Al₁₈(SiO₄)₈O₄(OH)₄ (8+18+4=30 theoretical
+    maximum) with typical partial vacancy at the Y-site.
 
     End-members: Fe-Staurolite, Mg-Staurolite, Zn-Staurolite, Mn-Staurolite.
     """
@@ -833,23 +840,16 @@ class Staurolite(Mineral):
     name = "Staurolite"
     abbreviation = "St"
     n_oxygens = 48
-    ideal_cations = None
+    ideal_cations = 29.5
     analytical_total_range = (99.0, 101.0)
     valence_splits: ClassVar = []
     site_definitions: ClassVar = [
         {"name": "T", "capacity": 8.0, "priority": ["Si{4+}", "Al{3+}"]},
+        {"name": "M", "capacity": 18.0, "priority": ["Al{3+}", "Ti{4+}", "Cr{3+}"]},
         {
-            "name": "M",
-            "capacity": 12.0,
-            "priority": [
-                "Al{3+}",
-                "Ti{4+}",
-                "Cr{3+}",
-                "Fe{2+}",
-                "Mg{2+}",
-                "Mn{2+}",
-                "Zn{2+}",
-            ],
+            "name": "Y",
+            "capacity": 4.0,
+            "priority": ["Zn{2+}", "Mn{2+}", "Fe{2+}", "Mg{2+}"],
         },
     ]
 
@@ -886,6 +886,7 @@ class Chlorite(Mineral):
 
     Sites: T(4.0), M(6.0).  Fe is assumed Fe²⁺ (Dubacq & Forshaw 2024).
     Uses charge-based APFU normalization (28 charges), not oxygen-based.
+    ``ideal_cations=10`` (4 tetrahedral + 6 octahedral).
 
     End-members (MinPlot algorithm):
     Clinochlore, Chamosite, Mg-Sudoite, Fe-Sudoite.
@@ -894,7 +895,7 @@ class Chlorite(Mineral):
     name = "Chlorite"
     abbreviation = "Chl"
     n_oxygens = 14
-    ideal_cations = None
+    ideal_cations = 10
     analytical_total_range = (85.0, 90.0)
     valence_splits: ClassVar = []
     site_definitions: ClassVar = [
@@ -922,7 +923,10 @@ class Chlorite(Mineral):
     def end_members(self, df: pd.DataFrame, units: str = "wt%") -> pd.DataFrame:
         """Chlorite end-members via MinPlot algorithm (%).
 
-        Returns Clinochlore, Chamosite, Mg-Sudoite, Fe-Sudoite.
+        Trioctahedral series, split by dominant divalent cation:
+        Clinochlore (Mg), Chamosite (Fe²⁺), Pennantite (Mn²⁺), Nimite (Ni²⁺).
+        Dioctahedral/Tschermak (sudoite) series, Mg/Fe²⁺ only — Mn/Ni-sudoite
+        are not recognized species: Mg-Sudoite, Fe-Sudoite.
         """
         elem_apfu = self._raw_apfu(df, units)
         idx = elem_apfu.index
@@ -930,18 +934,29 @@ class Chlorite(Mineral):
         si = self._col(elem_apfu, "Si{4+}")
         fe = self._col(elem_apfu, "Fe{2+}")
         mg = self._col(elem_apfu, "Mg{2+}")
+        mn = self._col(elem_apfu, "Mn{2+}")
+        ni = self._col(elem_apfu, "Ni{2+}")
 
-        r2 = mg + fe
-        x_mg = (mg / r2.replace(0, 1)).where(r2 > 0, 0.0)
+        r2_tri = mg + fe + mn + ni
+        r2_tri_safe = r2_tri.replace(0, 1)
+        x_mg_tri = (mg / r2_tri_safe).where(r2_tri > 0, 0.0)
+        x_fe_tri = (fe / r2_tri_safe).where(r2_tri > 0, 0.0)
+        x_mn_tri = (mn / r2_tri_safe).where(r2_tri > 0, 0.0)
+        x_ni_tri = (ni / r2_tri_safe).where(r2_tri > 0, 0.0)
+
+        r2_di = mg + fe
+        x_mg_di = (mg / r2_di.replace(0, 1)).where(r2_di > 0, 0.0)
 
         x_normal = ((si - 2.0) / 1.0).clip(lower=0).clip(upper=1.0)
         x_tsch = 1.0 - x_normal
 
         result = pd.DataFrame(index=idx)
-        result["Clinochlore"] = x_normal * x_mg * 100
-        result["Chamosite"] = x_normal * (1.0 - x_mg) * 100
-        result["Mg-Sudoite"] = x_tsch * x_mg * 100
-        result["Fe-Sudoite"] = x_tsch * (1.0 - x_mg) * 100
+        result["Clinochlore"] = x_normal * x_mg_tri * 100
+        result["Chamosite"] = x_normal * x_fe_tri * 100
+        result["Pennantite"] = x_normal * x_mn_tri * 100
+        result["Nimite"] = x_normal * x_ni_tri * 100
+        result["Mg-Sudoite"] = x_tsch * x_mg_di * 100
+        result["Fe-Sudoite"] = x_tsch * (1.0 - x_mg_di) * 100
         return result
 
 

@@ -590,3 +590,25 @@ class TestEvalExpr:
         df = pd.DataFrame({"Sps": [1.0, 2.0]})
         with pytest.raises(TypeError, match="must evaluate to a pandas Series"):
             eval_expr("1 + 1", df)
+
+    def test_unquoted_ion_names_in_multi_term_expression(self) -> None:
+        df = pd.DataFrame({"Mg{2+}": [1.0, 2.0], "Fe{2+}": [3.0, 4.0]})
+        result = eval_expr("Mg{2+} + Fe{2+}", df)
+        assert result.tolist() == [4.0, 6.0]
+
+    def test_unquoted_missing_ion_name_defaults_to_zero(self) -> None:
+        df = pd.DataFrame({"Mg{2+}": [1.0, 2.0]})
+        result = eval_expr("Mg{2+} + Fe{2+}", df)
+        assert result.tolist() == [1.0, 2.0]
+
+    def test_manual_backtick_quoting_of_ion_names_still_works(self) -> None:
+        df = pd.DataFrame({"Mg{2+}": [1.0, 2.0], "Fe{2+}": [3.0, 4.0]})
+        result = eval_expr("`Mg{2+}` + `Fe{2+}`", df)
+        assert result.tolist() == [4.0, 6.0]
+
+    def test_non_ion_curly_braces_still_raise(self) -> None:
+        # "Xx" isn't a real element, so _parse_ion() rejects it and it's left
+        # unquoted — invalid eval syntax, not silently coerced into a column name.
+        df = pd.DataFrame({"Sps": [1.0, 2.0]})
+        with pytest.raises(SyntaxError):
+            eval_expr("Sps + Xx{2+}", df)

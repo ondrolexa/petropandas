@@ -14,6 +14,7 @@ from petropandas._core import _formula_cols as _core_formula_cols
 from petropandas._core import _is_oxide as _core_is_oxide
 from petropandas._core import _oxide_cols as _core_oxide_cols
 from petropandas._minerals import Mineral
+from petropandas.hpxeos.base import Phase
 
 # ---------------------------------------------------------------------------
 # Canonical column order
@@ -345,26 +346,45 @@ class _BaseAccessor(_CleaningAccessor):
         out.attrs["petro_units"] = self._units()
         return out
 
-    def calc(self, new_col: str, expr: str) -> pd.DataFrame:
-        """Add a column computed from a ``pandas.eval()``-style expression.
+    def calc(
+        self, new_col: str | dict[str, str], expr: str | None = None
+    ) -> pd.DataFrame:
+        """Add one or more columns computed from ``pandas.eval()``-style expressions.
 
         Args:
             new_col: Name of the column to add (overwrites if it already
-                exists).
+                exists), or a ``{new_col: expr}`` dict to add several at
+                once — evaluated in dict order, so a later expression may
+                reference an earlier ``new_col`` in the same call.
             expr: A column name of the DataFrame, or an eval expression —
                 see ``petropandas._calc.eval_expr`` for the full syntax
-                (backtick-quoting for special-character names like
-                ``"Al{3+}"``, missing-name zero-fill in multi-term
-                expressions).
+                (ion-notation names like ``"Fe{2+}"`` are auto-quoted;
+                other special-character names need backtick-quoting;
+                missing names default to 0 in multi-term expressions).
+                Required when ``new_col`` is a single column name; must be
+                omitted when ``new_col`` is a dict.
 
         Returns:
-            Copy of the DataFrame with ``new_col`` added.
+            Copy of the DataFrame with the new column(s) added.
 
         Raises:
-            TypeError: If ``expr`` doesn't evaluate to a ``pandas.Series``.
+            TypeError: If ``new_col`` is a dict and ``expr`` is also given
+                (or vice versa), or if an expression doesn't evaluate to a
+                ``pandas.Series``.
         """
+        if isinstance(new_col, dict):
+            if expr is not None:
+                raise TypeError(
+                    "calc() takes either (new_col, expr) or a single dict, not both"
+                )
+            mapping = new_col
+        else:
+            if expr is None:
+                raise TypeError("calc() requires expr when new_col is a column name")
+            mapping = {new_col: expr}
         result = self._obj.copy()
-        result[new_col] = _calc.eval_expr(expr, result)
+        for col, col_expr in mapping.items():
+            result[col] = _calc.eval_expr(col_expr, result)
         result.attrs["petro_units"] = self._units()
         return result
 
@@ -401,6 +421,33 @@ class MineralAccessor(_CleaningAccessor):
         own ``end_members`` method.
         """
         return mineral.end_members(self._obj, units=self._units(), **kwargs)
+
+    def variables(self, phase: Phase) -> pd.DataFrame:
+        """Compute an hpxeos Phase's site fractions and compositional variables.
+
+        The site-fractions -> compositional-variables stages of the a-x
+        pipeline, one step before ``end_members()``'s end-member
+        polynomial evaluation: site occupancies (e.g. biotite's ``Fe``,
+        ``Mg``, ``AlOct``) followed by the derived independent variables
+        (x, y, z, m, Q, ...), in that column order. Useful for inspecting
+        a phase's intermediate state (e.g. biotite's ``x = Fe/(Fe+Mg)``)
+        directly. Any order-disorder variable (e.g. biotite's ``Q``)
+        defaults to ``0.0`` (fully disordered) — call ``phase.variables(...)``
+        directly to supply ``order_parameters``.
+
+        Args:
+            phase: An ``hpxeos.base.Phase`` instance (e.g. ``TC_bi``).
+
+        Returns:
+            DataFrame with the phase's site-fraction columns followed by
+            its compositional-variable columns, one row per analysis.
+        """
+        units = self._units()
+        raw = phase._raw_apfu(self._obj, units=units)
+        phase._validate_columns(raw)
+        site_fractions = phase.site_fractions(raw)
+        variables = phase.variables(site_fractions)
+        return pd.concat([site_fractions, variables], axis=1)
 
     def check_stoichiometry(self, mineral: Mineral) -> pd.DataFrame:
         """Validate analysis against a mineral's ideal stoichiometry.

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-09-05
+
+### Added
+- `calc()` accepts a `{new_col: expr, ...}` dict to add several computed columns in one call, evaluated in order so a later expression may reference an earlier `new_col`
+- `df.mineral.variables(phase)`: an hpxeos `Phase`'s site fractions followed by its independent compositional variables (x, y, z, m, Q, ...), the two a-x pipeline stages between site allocation and `end_members()`; order-disorder variables default to fully disordered (0.0) — call `phase.variables(...)` directly for `order_parameters`
+
+### Changed
+- `calc(new_col, expr)` and plotting axis expressions (`ScatterPlot`/`TernaryPlot`) no longer require backtick-quoting ion-notation column names (e.g. `"Mg{2+} + Fe{2+}"` now works directly) — they're auto-detected and quoted internally; backtick-quoting is still supported and still required for other special-character names
+- `Mineral.__repr__` now reports name, abbreviation, ideal cation total, and oxygen basis together, e.g. `repr(Grt) == "Garnet[Grt] cations=8 n_oxygens=12"` (previously just `"Garnet"`); `str(mineral)` is unchanged
+
 ## [0.2.2] - 2026-09-04
 
 ### Added

@@ -170,6 +170,12 @@ class TestCalcAcrossUnits:
         result = apfu.cations.calc("MgFe", "`Mg{2+}` + `Fe{2+}`")
         assert result.attrs.get("petro_units") == "apfu"
 
+    def test_ion_names_need_no_backticks(self, garnet_multi: pd.DataFrame) -> None:
+        apfu = garnet_multi.cations(n_oxygens=12)
+        result = apfu.cations.calc("MgFe", "Mg{2+} + Fe{2+}")
+        expected = apfu.cations.calc("MgFe", "`Mg{2+}` + `Fe{2+}`")
+        assert result["MgFe"].tolist() == expected["MgFe"].tolist()
+
     def test_overwrites_existing_column(self, garnet_multi: pd.DataFrame) -> None:
         oxides = garnet_multi.oxides()
         result = oxides.oxides.calc("SiO2", "SiO2 * 2")
@@ -179,3 +185,50 @@ class TestCalcAcrossUnits:
         oxides = garnet_multi.oxides()
         with pytest.raises(TypeError, match="must evaluate to a pandas Series"):
             oxides.oxides.calc("Const", "1 + 1")
+
+    def test_dict_adds_multiple_columns(self, garnet_multi: pd.DataFrame) -> None:
+        oxides = garnet_multi.oxides()
+        result = oxides.oxides.calc({"SiAl": "SiO2 + Al2O3", "MgO2": "MgO * 2"})
+        assert result["SiAl"].tolist() == pytest.approx(
+            (oxides["SiO2"] + oxides["Al2O3"]).tolist()
+        )
+        assert result["MgO2"].tolist() == pytest.approx((oxides["MgO"] * 2).tolist())
+
+    def test_dict_later_expr_can_reference_earlier_new_col(
+        self, garnet_multi: pd.DataFrame
+    ) -> None:
+        oxides = garnet_multi.oxides()
+        result = oxides.oxides.calc({"SiAl": "SiO2 + Al2O3", "SiAlDouble": "SiAl * 2"})
+        assert result["SiAlDouble"].tolist() == pytest.approx(
+            (result["SiAl"] * 2).tolist()
+        )
+
+    def test_dict_preserves_units(self, garnet_multi: pd.DataFrame) -> None:
+        moles = garnet_multi.moles()
+        result = moles.moles.calc({"SiAl": "SiO2 + Al2O3"})
+        assert result.attrs.get("petro_units") == "moles"
+
+    def test_dict_matches_sequential_single_calls(
+        self, garnet_multi: pd.DataFrame
+    ) -> None:
+        oxides = garnet_multi.oxides()
+        dict_result = oxides.oxides.calc({"SiAl": "SiO2 + Al2O3", "MgO2": "MgO * 2"})
+        chained_result = oxides.oxides.calc("SiAl", "SiO2 + Al2O3").oxides.calc(
+            "MgO2", "MgO * 2"
+        )
+        assert dict_result["SiAl"].tolist() == chained_result["SiAl"].tolist()
+        assert dict_result["MgO2"].tolist() == chained_result["MgO2"].tolist()
+
+    def test_dict_and_expr_together_raises(self, garnet_multi: pd.DataFrame) -> None:
+        oxides = garnet_multi.oxides()
+        with pytest.raises(TypeError, match="either .new_col, expr. or a single dict"):
+            oxides.oxides.calc({"SiAl": "SiO2 + Al2O3"}, "MgO * 2")
+
+    def test_missing_expr_for_single_column_raises(
+        self, garnet_multi: pd.DataFrame
+    ) -> None:
+        oxides = garnet_multi.oxides()
+        with pytest.raises(
+            TypeError, match="requires expr when new_col is a column name"
+        ):
+            oxides.oxides.calc("SiAl")

@@ -84,6 +84,17 @@ def test_scatter_backtick_quoted_ion_expression():
     plt.close(fig)
 
 
+def test_scatter_ion_expression_needs_no_backticks():
+    """Ion-notation column names are auto-quoted, so backticks are optional."""
+    df = pd.DataFrame({"Al{3+}": [1.0, 2.0], "Si{4+}": [3.0, 4.0]})
+    s = ScatterPlot("Al{3+} + Si{4+}", "Al{3+}")
+    s.add(df)
+    fig, ax = s.render()
+    offsets = np.asarray(ax.collections[0].get_offsets())
+    assert offsets[:, 0] == pytest.approx((df["Al{3+}"] + df["Si{4+}"]).to_numpy())
+    plt.close(fig)
+
+
 def test_scatter_default_label_strips_backticks():
     """Backtick quoting is eval() syntax, not part of the intended label text."""
     df = pd.DataFrame({"Al{3+}": [1.0, 2.0], "Si{4+}": [3.0, 4.0]})

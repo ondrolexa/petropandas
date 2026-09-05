@@ -72,18 +72,41 @@ def _referenced_names(expr: str) -> set[str]:
     return names
 
 
+# Element symbol immediately followed by a `{charge}` suffix, e.g. "Fe{2+}", "Al{3+}",
+# "Na{+}" — the ion-notation convention used for column names throughout this library.
+# Validated against `_parse_ion` before quoting to reject false positives (curly braces
+# aren't otherwise meaningful in an eval expression, so false positives should be rare
+# in practice).
+_ION_TOKEN_RE = re.compile(r"[A-Z][a-z]?\{[^{}]*\}")
+
+
+def _autoquote_ions(expr: str) -> str:
+    """Backtick-quote ion-notation column references (e.g. ``Fe{2+}``) not already quoted."""
+    parts = re.split(r"(`[^`]*`)", expr)
+    for i, part in enumerate(parts):
+        if part.startswith("`"):
+            continue
+        parts[i] = _ION_TOKEN_RE.sub(
+            lambda m: f"`{m.group(0)}`" if _parse_ion(m.group(0)) else m.group(0),
+            part,
+        )
+    return "".join(parts)
+
+
 def eval_expr(expr: str, data: pd.DataFrame) -> pd.Series:
     """Evaluate a column expression against a DataFrame.
 
     Args:
         expr: A column name of ``data`` (matched directly, so exotic
             names like ion notation ``"Al{3+}"`` work with no
-            escaping), or a ``DataFrame.eval()`` expression — wrap
-            special-character column names in backticks to combine
-            them (e.g. ``` "`Al{3+}` + `Si{4+}`" ```). A name missing
-            from ``data`` defaults to 0 *within a multi-term
-            expression*; a single column reference that's entirely
-            missing still raises.
+            escaping), or a ``DataFrame.eval()`` expression. Ion-notation
+            names (``Elem{charge}``, e.g. ``"Mg{2+} + Fe{2+}"``) are
+            auto-quoted and need no backticks; any other
+            special-character column name must be wrapped in backticks
+            to combine it with the rest of the expression (e.g.
+            ``` "`My Col` + `Fe{2+}`" ```). A name missing from ``data``
+            defaults to 0 *within a multi-term expression*; a single
+            column reference that's entirely missing still raises.
         data: Samples in rows, variables in columns.
 
     Returns:
@@ -96,15 +119,17 @@ def eval_expr(expr: str, data: pd.DataFrame) -> pd.Series:
     stripped = expr.strip()
     if stripped in data.columns:
         result = data[stripped]
-    elif _SINGLE_NAME_RE.fullmatch(stripped):
-        result = data.eval(expr)
     else:
-        missing = _referenced_names(expr) - set(data.columns)
-        if missing:
-            data = data.copy()
-            for name in missing:
-                data[name] = 0.0
-        result = data.eval(expr)
+        auto_expr = _autoquote_ions(stripped)
+        if _SINGLE_NAME_RE.fullmatch(auto_expr):
+            result = data.eval(auto_expr)
+        else:
+            missing = _referenced_names(auto_expr) - set(data.columns)
+            if missing:
+                data = data.copy()
+                for name in missing:
+                    data[name] = 0.0
+            result = data.eval(auto_expr)
     if not isinstance(result, pd.Series):
         raise TypeError(
             f"Expression {expr!r} must evaluate to a pandas Series, "
