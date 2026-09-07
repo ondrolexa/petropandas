@@ -70,6 +70,7 @@ _MAGEMIN_SYSTEMS: dict[str, list[str]] = {
     "mpe": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "MnO", "H2O", "CO2", "S"],
     "mbe": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "H2O"],
     "mtl": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "Na2O"],
+    "all": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3", "MnO", "H2O", "CO2", "S"],
 }
 # fmt: on
 
