@@ -206,7 +206,7 @@ Chains work seamlessly: `df.oxides().moles().oxides()` roundtrips back to wt%.
 | `df.bulk.fractionate(profile, fraction, *, mineral=None, order="core-to-rim")` | Subtract a fractionating mineral (volume-integrated from a radial EPMA profile) from the bulk via molar mass balance |
 | `df.bulk.TCbulk(*, system, ...)` | THERMOCALC bulk script output |
 | `df.bulk.Perplexbulk(*, system, ...)` | PerpleX thermodynamic component list output |
-| `df.bulk.MAGEMin(*, db, ...)` | MAGEMin bulk input file output |
+| `df.bulk.MAGEMin(*, db, ...)` | MAGEMin bulk input file output (`db`: `ig`, `igd`, `igad`, `mp`, `mpe`, `mb`, `mbe`, `um`, `ume`, `mtl`, `all`, `sb11`, `sb21`, `sb24`) |
 
 ### Series accessor (`series.mineral`)
 

@@ -558,6 +558,18 @@ class TestPerplexbulk:
 # ---------------------------------------------------------------------------
 
 
+class TestKFMASHNoOxygen:
+    """KFMASH has no oxygen component, so rows must sum to exactly 100."""
+
+    def test_tcbulk(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.TCbulk(system="KFMASH", dataframe=True)
+        assert np.allclose(result.sum(axis=1), 100.0)
+
+    def test_perplexbulk(self, granite_bulk: pd.DataFrame) -> None:
+        result = granite_bulk.bulk.Perplexbulk(system="KFMASH", dataframe=True)
+        assert np.allclose(result.sum(axis=1), 100.0)
+
+
 class TestMAGEMin:
     def test_granite_prints_header(self, granite_bulk: pd.DataFrame, capsys) -> None:
         granite_bulk.bulk.MAGEMin()
@@ -607,6 +619,33 @@ class TestMAGEMin:
     def test_invalid_db_raises(self, granite_bulk: pd.DataFrame) -> None:
         with pytest.raises(ValueError, match="Invalid database"):
             granite_bulk.bulk.MAGEMin(db="INVALID")
+
+    @pytest.mark.parametrize(
+        ("db", "oxides"),
+        [
+            ("ig", "SiO2 Al2O3 CaO MgO FeO K2O Na2O TiO2 O Cr2O3 H2O"),
+            ("igd", "SiO2 Al2O3 CaO MgO FeO K2O Na2O TiO2 O Cr2O3"),
+            ("igad", "SiO2 Al2O3 CaO MgO FeO K2O Na2O TiO2 O Cr2O3"),
+            ("mp", "SiO2 Al2O3 CaO MgO FeO K2O Na2O TiO2 O MnO H2O"),
+            ("mpe", "SiO2 Al2O3 CaO MgO FeO K2O Na2O TiO2 O MnO H2O CO2 S"),
+            ("mb", "SiO2 Al2O3 CaO MgO FeO K2O Na2O TiO2 O H2O"),
+            ("mbe", "SiO2 Al2O3 CaO MgO FeO K2O Na2O TiO2 O H2O"),
+            ("um", "SiO2 Al2O3 MgO FeO O H2O S"),
+            ("ume", "SiO2 Al2O3 MgO FeO O H2O S CaO Na2O Cr2O3 CO2"),
+            ("mtl", "SiO2 Al2O3 CaO MgO FeO Na2O"),
+            ("all", "SiO2 Al2O3 CaO MgO FeO K2O Na2O TiO2 O MnO Cr2O3 H2O CO2 S"),
+            ("sb11", "SiO2 CaO Al2O3 FeO MgO Na2O"),
+            ("sb21", "SiO2 CaO Al2O3 FeO MgO Na2O"),
+            ("sb24", "SiO2 CaO Al2O3 MgO Na2O O Cr2O3 Fe"),
+        ],
+    )
+    def test_all_magemin_databases(
+        self, granite_bulk: pd.DataFrame, db: str, oxides: str
+    ) -> None:
+        """Columns match MAGEMin's own oxide list (``MAGEMin(db).oxide_names``)."""
+        result = granite_bulk.bulk.MAGEMin(db=db, dataframe=True)
+        assert list(result.columns) == oxides.split()
+        assert np.allclose(result.sum(axis=1), 100.0)
 
     def test_sys_in_wt(self, granite_bulk: pd.DataFrame) -> None:
         result = granite_bulk.bulk.MAGEMin(db="mp", sys_in="wt", dataframe=True)

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-11-10
+
+### Added
+- `df.bulk.MAGEMin()` supports every MAGEMin database: `igd`, `igad`, `sb11`, `sb21` and `sb24` (whose metallic `Fe` component is always 0) join the existing ones
+
+### Fixed
+- `df.bulk.MAGEMin(db="ume")` now includes the `Cr2O3` and `CO2` components
+- Thermodynamic bulk output (`MAGEMin`, `TCbulk`, `Perplexbulk`) no longer reserves room for the oxygen component when the system has none, so rows sum to 100 (previously 99.99 for MAGEMin `mtl`, `sb11`, `sb21` and for `TCbulk(system="KFMASH")`, 99.98 for `Perplexbulk(system="KFMASH")`)
+
 ## [0.2.3] - 2026-09-05
 
 ### Added

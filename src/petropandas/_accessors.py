@@ -65,12 +65,17 @@ _MAGEMIN_SYSTEMS: dict[str, list[str]] = {
     "ig":  ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3", "H2O"],
     "mp":  ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "MnO", "H2O"],
     "mb":  ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "H2O"],
+    "igd":  ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3"],
+    "igad": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3"],
     "um":  ["SiO2", "Al2O3", "MgO", "FeO", "O", "H2O", "S"],
-    "ume": ["SiO2", "Al2O3", "MgO", "FeO", "O", "H2O", "S", "CaO", "Na2O"],
+    "ume": ["SiO2", "Al2O3", "MgO", "FeO", "O", "H2O", "S", "CaO", "Na2O", "Cr2O3", "CO2"],
     "mpe": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "MnO", "H2O", "CO2", "S"],
     "mbe": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "H2O"],
     "mtl": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "Na2O"],
-    "all": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3", "MnO", "H2O", "CO2", "S"],
+    "all": ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "MnO", "Cr2O3", "H2O", "CO2", "S"],
+    "sb11": ["SiO2", "CaO", "Al2O3", "FeO", "MgO", "Na2O"],
+    "sb21": ["SiO2", "CaO", "Al2O3", "FeO", "MgO", "Na2O"],
+    "sb24": ["SiO2", "CaO", "Al2O3", "MgO", "Na2O", "O", "Cr2O3", "Fe"],
 }
 # fmt: on
 
@@ -1044,7 +1049,7 @@ class BulkAccessor(_BaseAccessor):
         work = work[list(use)]
 
         # ---- convert to moles / scale to target ----------------------------
-        target = 100.0 - oxygen * oxygen_mult
+        target = 100.0 - (oxygen * oxygen_mult if oxygen_key in system_cols else 0.0)
         if use_molprop:
             work = _calc.to_moles(work)
         work = work.div(work.sum(axis=1), axis=0) * target
@@ -1174,11 +1179,14 @@ class BulkAccessor(_BaseAccessor):
         Fe₂O₃ is reduced to FeO before formatting.
 
         Args:
-            db: MAGEMin database — ``"ig"`` (igneous), ``"mp"``
+            db: MAGEMin database — ``"ig"`` (igneous), ``"igd"`` (igneous
+                dry), ``"igad"`` (igneous alkaline dry), ``"mp"``
                 (metapelite), ``"mb"`` (metabasite), ``"um"`` (ultramafic),
                 ``"ume"`` (ultramafic ext.), ``"mpe"`` (metapelite ext.),
-                ``"mbe"`` (metabasite ext.), ``"mtl"`` (mantle).
-                Default ``"mp"``.
+                ``"mbe"`` (metabasite ext.), ``"mtl"`` (mantle), ``"all"``
+                (union of the above), ``"sb11"``/``"sb21"``/``"sb24"``
+                (Stixrude & Lithgow-Bertelloni; ``sb24`` has a metallic
+                ``Fe`` component, always 0). Default ``"mp"``.
             sys_in: Unit system — ``"mol"`` (molar proportions, default)
                 or ``"wt"`` (weight percent).
             oxygen: Moles of ferric oxygen (default 0.01).

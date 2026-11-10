@@ -1,6 +1,6 @@
 """petropandas — electron microprobe mineral analysis toolkit built on pandas."""
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 import functools
 

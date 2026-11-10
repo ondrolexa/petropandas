@@ -94,7 +94,7 @@ Bulk Composition Accessor
    * - ``df.bulk.Perplexbulk()``
      - PerpleX bulk composition
    * - ``df.bulk.MAGEMin()``
-     - MAGEMin bulk composition
+     - MAGEMin bulk composition (``db``: ``ig``, ``igd``, ``igad``, ``mp``, ``mpe``, ``mb``, ``mbe``, ``um``, ``ume``, ``mtl``, ``all``, ``sb11``, ``sb21``, ``sb24``)
 
 Example Data
 ------------
